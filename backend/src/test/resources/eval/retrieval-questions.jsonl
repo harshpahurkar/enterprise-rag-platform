@@ -1,0 +1,18 @@
+{"question": "How many vacation days do I get each year?", "expectedFile": "employee-handbook.md", "roles": ["EMPLOYEE"]}
+{"question": "What is the most I can claim for a client dinner per person?", "expectedFile": "employee-handbook.md", "roles": ["EMPLOYEE", "FINANCE"]}
+{"question": "Which days am I expected to be in the office?", "expectedFile": "employee-handbook.md", "roles": ["EMPLOYEE"]}
+{"question": "How quickly do I have to report a lost laptop or a phishing click?", "expectedFile": "security-policy.md", "roles": ["EMPLOYEE", "LEGAL"]}
+{"question": "Can I keep a customer's SIN number in a spreadsheet?", "expectedFile": "security-policy.md", "roles": ["EMPLOYEE"]}
+{"question": "How long after a project ends do we have to destroy client data?", "expectedFile": "security-policy.md", "roles": ["EMPLOYEE", "ADMIN"]}
+{"question": "What do I do if the canary deploy starts throwing errors?", "expectedFile": "engineering-runbook.md", "roles": ["ENGINEERING"]}
+{"question": "How long do I have to acknowledge a page when I'm primary on call?", "expectedFile": "engineering-runbook.md", "roles": ["ENGINEERING", "ADMIN"]}
+{"question": "What counts as a SEV1 and how fast must we respond?", "expectedFile": "engineering-runbook.md", "roles": ["ENGINEERING"]}
+{"question": "What is the salary range for a Senior Consultant?", "expectedFile": "hr-compensation-2026.md", "roles": ["HR"]}
+{"question": "What percentage of salary is the target bonus for managers?", "expectedFile": "hr-compensation-2026.md", "roles": ["HR", "ADMIN"]}
+{"question": "Who should I contact in HR about a payroll correction?", "expectedFile": "hr-compensation-2026.md", "roles": ["HR"]}
+{"question": "How much revenue did we bring in last quarter?", "expectedFile": "finance-q3-2025-report.md", "roles": ["FINANCE"]}
+{"question": "Who are our biggest clients by billing?", "expectedFile": "finance-q3-2025-report.md", "roles": ["FINANCE", "ADMIN"]}
+{"question": "Why is the conference registration expense still on hold?", "expectedFile": "finance-q3-2025-report.md", "roles": ["FINANCE"]}
+{"question": "What is the cap on our liability to Corvane?", "expectedFile": "legal-client-msa.md", "roles": ["LEGAL"]}
+{"question": "How soon must we tell Corvane about a data breach?", "expectedFile": "legal-client-msa.md", "roles": ["LEGAL", "ADMIN"]}
+{"question": "What does Corvane owe us if they walk away early?", "expectedFile": "legal-client-msa.md", "roles": ["LEGAL"]}

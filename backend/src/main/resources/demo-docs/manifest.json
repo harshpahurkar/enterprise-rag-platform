@@ -1,0 +1,8 @@
+[
+  {"file": "employee-handbook.md", "title": "Employee Handbook", "allowedRoles": ["EMPLOYEE"]},
+  {"file": "security-policy.md", "title": "Information Security Policy", "allowedRoles": ["EMPLOYEE"]},
+  {"file": "engineering-runbook.md", "title": "Engineering Runbook", "allowedRoles": ["ENGINEERING"]},
+  {"file": "hr-compensation-2026.md", "title": "2026 Compensation Framework", "allowedRoles": ["HR"]},
+  {"file": "finance-q3-2025-report.md", "title": "Q3 2025 Financial Report", "allowedRoles": ["FINANCE"]},
+  {"file": "legal-client-msa.md", "title": "Master Services Agreement: Corvane Freight Ltd.", "allowedRoles": ["LEGAL"]}
+]

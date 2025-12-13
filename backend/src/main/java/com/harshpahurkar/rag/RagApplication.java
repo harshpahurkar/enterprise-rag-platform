@@ -2,12 +2,14 @@ package com.harshpahurkar.rag;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 
 @SpringBootApplication
-public class RagPlatformApplication {
+@ConfigurationPropertiesScan
+public class RagApplication {
 
 	public static void main(String[] args) {
-		SpringApplication.run(RagPlatformApplication.class, args);
+		SpringApplication.run(RagApplication.class, args);
 	}
 
 }

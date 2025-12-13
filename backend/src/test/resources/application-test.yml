@@ -1,0 +1,5 @@
+app:
+  jwt:
+    secret: test-secret-test-secret-test-secret-0123456789
+  llm:
+    api-key: test-key-not-used

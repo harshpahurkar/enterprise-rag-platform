@@ -1,10 +1,20 @@
 package com.harshpahurkar.rag.ai;
 
+import java.util.Map;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import com.harshpahurkar.rag.AppProperties;
+
+import dev.langchain4j.memory.chat.MessageWindowChatMemory;
+import dev.langchain4j.model.anthropic.AnthropicChatModel;
+import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.request.ChatRequest;
+import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.embedding.onnx.bgesmallenv15q.BgeSmallEnV15QuantizedEmbeddingModel;
+import dev.langchain4j.service.AiServices;
 
 @Configuration
 public class AiConfig {
@@ -21,6 +31,40 @@ public class AiConfig {
 					"Embedding model dimension " + model.dimension() + " != schema " + EMBEDDING_DIMENSION);
 		}
 		return model;
+	}
+
+	/**
+	 * Claude, with no temperature/top_p/top_k (the defaults are fine) and no thinking config (it can't be
+	 * turned off). Effort goes in output_config. Without a key the app still starts (search
+	 * needs no LLM) and only /api/ask fails, as a 503.
+	 */
+	@Bean
+	ChatModel chatModel(AppProperties props) {
+		AppProperties.Llm llm = props.llm();
+		if (llm.apiKey() == null || llm.apiKey().isBlank()) {
+			return new ChatModel() {
+				@Override
+				public ChatResponse doChat(ChatRequest request) {
+					throw new IllegalStateException("ANTHROPIC_API_KEY is not set");
+				}
+			};
+		}
+		return AnthropicChatModel.builder()
+			.apiKey(llm.apiKey())
+			.modelName(llm.model())
+			.maxTokens(llm.maxTokens())
+			.timeout(llm.timeout())
+			.customParameters(Map.of("output_config", Map.of("effort", llm.effort())))
+			.build();
+	}
+
+	/** One chat memory per call (see {@link Assistant}); AskService evicts it when the call ends. */
+	@Bean
+	Assistant assistant(ChatModel chatModel) {
+		return AiServices.builder(Assistant.class)
+			.chatModel(chatModel)
+			.chatMemoryProvider(memoryId -> MessageWindowChatMemory.withMaxMessages(10))
+			.build();
 	}
 
 }

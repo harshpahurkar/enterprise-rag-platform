@@ -134,4 +134,16 @@ class RbacIT {
 			.with(hr)).andExpect(status().isBadRequest());
 	}
 
+	/**
+	 * Role-filtered HNSW search depends on two per-connection settings from application.yml: without the
+	 * iterative scan a selective filter returns fewer than k rows, and a generic plan skips the index entirely.
+	 */
+	@Test
+	void everyPooledConnectionKeepsFilteredSearchOnTheIndex() {
+		org.assertj.core.api.Assertions.assertThat(jdbc.sql("SHOW hnsw.iterative_scan").query(String.class).single())
+			.isEqualTo("strict_order");
+		org.assertj.core.api.Assertions.assertThat(jdbc.sql("SHOW plan_cache_mode").query(String.class).single())
+			.isEqualTo("force_custom_plan");
+	}
+
 }

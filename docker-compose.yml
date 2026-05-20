@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-rag}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rag}
     ports:
-      - "5432:5432" # local dev: ./mvnw spring-boot:run connects here
+      - "127.0.0.1:5432:5432" # localhost only: ./mvnw spring-boot:run connects here
     volumes:
       - pgdata:/var/lib/postgresql
     shm_size: 1gb
@@ -23,7 +23,7 @@ services:
       SPRING_PROFILES_ACTIVE: demo
       DB_URL: jdbc:postgresql://db:5432/rag
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080" # localhost only: the demo profile seeds known passwords
     depends_on:
       db:
         condition: service_healthy

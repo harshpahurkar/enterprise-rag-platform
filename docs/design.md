@@ -1,5 +1,7 @@
 # Enterprise RAG platform: architecture and build plan
 
+> Approved design, kept in step with the code after the audit on 2026-06-14. Where the build changed a decision, the text below says what was built.
+
 ## Context
 
 Your resume lists "Enterprise RAG Intelligence & Document Search Platform | Java, Spring Boot, React, pgvector, LangChain" with three bullets. Nothing backs it yet. This plan builds the real project in a new repo, `C:\Users\Harsh\Desktop\Projects\enterprise-rag-platform`, so that every bullet points at code you can run and a test that proves it.
@@ -30,7 +32,7 @@ There are no Java projects in `Projects/` to copy conventions from. The frontend
 ```
 Browser (React SPA) ──Bearer JWT──►  Spring Boot 4.0 jar (also serves the built SPA)
                                      │
-  POST /api/auth/login ──────────────┼─► Spring Security: BCrypt users, HMAC JWT carrying roles
+  POST /api/auth/login ──────────────┼─► Spring Security: BCrypt users, HMAC JWT; roles read from DB per request
   GET/POST/DELETE /api/documents ────┼─► IngestionService
                                      │     Tika parse → recursive split (1000/150 chars)
                                      │     → BGE-small-en-v1.5 embed (in-process ONNX, 384-d)
@@ -51,7 +53,7 @@ Browser (React SPA) ──Bearer JWT──►  Spring Boot 4.0 jar (also serves 
 2. **Retrieve:** embed the question in-process, run the role-filtered SQL for the top 6 chunks, and time it as `retrievalMs`.
 3. **Score gate:** if no chunk scores at least `app.rag.min-score`, return the refusal sentence without calling the LLM. This saves cost and stops answers made up from nothing. The threshold is calibrated on the eval questions.
 4. Number the chunks as `[n] Title (part k)` inside `<sources>`, then call `assistant.answer(question, context)`. The guardrails run, then Claude.
-5. Return `{answer, sources[{n, documentId, title, chunkIndex, snippet, score}], retrievalMs, generationMs}`.
+5. Return `{answer, sources[{n, chunkId, documentId, title, chunkIndex, content, score}], retrievalMs, generationMs}`.
 
 ## Stack (versions checked on 2025-12-02 against Maven Central, endoflife.date, GitHub, and Docker Hub)
 
@@ -92,9 +94,8 @@ CREATE INDEX chunk_embedding_hnsw ON chunk USING hnsw (embedding vector_cosine_o
 CREATE INDEX chunk_document_id ON chunk (document_id);
 ```
 
-Retrieval query, run inside one read-only transaction:
+Retrieval query, one autocommit round trip. Hikari's `connection-init-sql` sets `hnsw.iterative_scan = strict_order` and `plan_cache_mode = force_custom_plan` once per pooled connection (the benchmark found a generic plan skips HNSW: 350-425 ms versus about 5 ms):
 ```sql
-SET LOCAL hnsw.iterative_scan = strict_order;
 SELECT c.id, c.document_id, d.title, c.chunk_index, c.content, 1 - (c.embedding <=> :q::vector) AS score
 FROM chunk c JOIN document d ON d.id = c.document_id
 WHERE d.allowed_roles && :roles::text[]
@@ -123,8 +124,8 @@ enterprise-rag-platform/
 │  ├─ security/  SecurityConfig.java (filter chain, JWT encoder/decoder, UserDetailsService over app_user, CSP)
 │  │             AuthController.java
 │  ├─ document/  DocumentController.java · IngestionService.java
-│  ├─ search/    Retriever.java (embed + SQL + timing) · SearchController.java (/search, /ask, guardrail → 422)
-│  │             AskService.java (score gate, context numbering, Assistant call)
+│  ├─ search/    Retriever.java (embed + SQL + timing) · SearchController.java (/search)
+│  ├─ ai/        AskService.java (injection pre-check, score gate, context, Assistant call) · AskController.java (/ask)
 │  ├─ ai/        AiConfig.java (EmbeddingModel, ChatModel, Assistant beans) · Assistant.java
 │  │             PromptInjectionGuardrail.java · PiiMaskingGuardrail.java · CitationGuardrail.java
 │  ├─ demo/      DemoDataLoader.java (@Profile("demo"): demo users + ingest demo-docs/ if empty)
@@ -132,7 +133,7 @@ enterprise-rag-platform/
 │                demo-docs/{employee-handbook, engineering-runbook, hr-compensation-2026,
 │                           finance-q3-2025, legal-client-msa, security-policy}.md + roles manifest
 │  test/        RbacIT · AuthIT · IngestionIT · AskFlowIT (stub ChatModel) · GuardrailsTest
-│               RetrievalQualityIT (12 questions → expected doc in top 5) · RetrievalLatencyIT (@Tag benchmark)
+│               RetrievalQualityIT (18 questions → expected doc in top 5) · RetrievalLatencyIT (@Tag benchmark)
 ├─ frontend/  src/{main.tsx, App.tsx, api.ts, index.css}
 │             src/views/{Login,Ask,Search,Documents}View.tsx · src/components/SourceCard.tsx
 │             vite.config.ts (proxy /api → :8080) · tests/smoke.spec.ts
@@ -147,7 +148,7 @@ enterprise-rag-platform/
 
 The Vite proxy follows that project's `vite.config.ts`, with one entry, `/api`, pointing to `:8080`.
 
-The demo data is a fictional consulting firm with obviously fake PII (`@example.com` emails, 555 phone numbers), so masking can be demonstrated. Demo users: `admin` (ADMIN plus all departments), `hr.manager` (HR, EMPLOYEE), `finance.analyst` (FINANCE, EMPLOYEE), `engineer` (ENGINEERING, EMPLOYEE). The password is documented in the README and exists only under the demo profile.
+The demo data is a fictional consulting firm with obviously fake PII (`@example.com` emails, 555 phone numbers), so masking can be demonstrated. Demo users: `admin` (ADMIN plus all departments), `hr.manager` (HR, EMPLOYEE), `finance.analyst` (FINANCE, EMPLOYEE), `legal.counsel` (LEGAL, EMPLOYEE), `engineer` (ENGINEERING, EMPLOYEE). The password is documented in the README and exists only under the demo profile.
 
 ## Guardrails
 

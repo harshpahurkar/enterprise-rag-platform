@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useId, useRef } from 'react'
 import type { Chunk } from '../api'
 
 interface Props {
@@ -16,6 +16,7 @@ const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').match
 
 export function SourceCard({ label, chunk, active = false, flash = 0, note }: Props) {
   const cardRef = useRef<HTMLElement>(null)
+  const titleId = useId()
   const markRef = useRef<HTMLSpanElement>(null)
 
   useEffect(() => {
@@ -35,7 +36,7 @@ export function SourceCard({ label, chunk, active = false, flash = 0, note }: Pr
     <article
       ref={cardRef}
       tabIndex={-1}
-      aria-labelledby={`chunk-${chunk.chunkId}-title`}
+      aria-labelledby={titleId}
       className={`relative isolate grid scroll-mt-6 grid-cols-[2.75rem_minmax(0,1fr)] rounded-panel border sm:grid-cols-[3.25rem_minmax(0,1fr)] ${
         active ? 'border-on-mark/30 bg-mark-soft' : 'border-rule bg-surface'
       }`}
@@ -52,7 +53,7 @@ export function SourceCard({ label, chunk, active = false, flash = 0, note }: Pr
       <div className="min-w-0 p-4">
         <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1.5">
           <div className="min-w-0">
-            <h3 id={`chunk-${chunk.chunkId}-title`} className="font-semibold break-words text-ink">
+            <h3 id={titleId} className="font-semibold break-words text-ink">
               <span className="sr-only">{label}. </span>
               {chunk.title}
             </h3>

@@ -36,6 +36,7 @@ export function SearchView() {
           name="query"
           type="search"
           required
+          maxLength={1000}
           autoComplete="off"
           enterKeyHint="search"
           placeholder="Search policies, runbooks, contracts…"

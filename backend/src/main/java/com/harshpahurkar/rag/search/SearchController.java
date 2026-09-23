@@ -2,8 +2,7 @@ package com.harshpahurkar.rag.search;
 
 import java.util.List;
 
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -11,6 +10,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.harshpahurkar.rag.AppProperties;
 import com.harshpahurkar.rag.search.Retriever.RetrievedChunk;
+import com.harshpahurkar.rag.security.Roles;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -39,9 +39,9 @@ class SearchController {
 	}
 
 	@PostMapping
-	SearchResponse search(@Valid @RequestBody SearchRequest req, @AuthenticationPrincipal Jwt jwt) {
+	SearchResponse search(@Valid @RequestBody SearchRequest req, Authentication authentication) {
 		int k = req.k() != null ? req.k() : props.rag().searchK();
-		Retriever.Retrieval r = retriever.retrieve(req.query(), jwt.getClaimAsStringList("roles"), k);
+		Retriever.Retrieval r = retriever.retrieve(req.query(), Roles.of(authentication), k);
 		return new SearchResponse(r.chunks(), r.retrievalMs());
 	}
 

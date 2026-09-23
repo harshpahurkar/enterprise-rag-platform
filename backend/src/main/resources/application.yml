@@ -44,3 +44,11 @@ app:
     timeout: 120s
   demo:
     password: ${DEMO_PASSWORD:demo-password}
+  # Fixed windows kept in memory. Over the limit: 429 with Retry-After.
+  rate-limit:
+    login: # per client IP
+      requests: 10
+      window: 1m
+    ask: # per user
+      requests: 20
+      window: 1h

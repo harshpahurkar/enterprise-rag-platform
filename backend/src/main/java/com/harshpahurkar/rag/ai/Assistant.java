@@ -25,6 +25,7 @@ public interface Assistant extends ChatMemoryAccess {
 	@InputGuardrails({ PromptInjectionGuardrail.class, PiiMaskingGuardrail.class })
 	// LangChain4j counts maxRetries as total attempts: 2 = the first answer plus at most one re-prompt.
 	@OutputGuardrails(value = CitationGuardrail.class, maxRetries = 2)
-	String answer(@MemoryId String memoryId, @V("question") String question, @V("context") String context);
+	String answer(@MemoryId String memoryId, @V("question") String question, @V("context") String context,
+			@V("sourceCount") int sourceCount);
 
 }

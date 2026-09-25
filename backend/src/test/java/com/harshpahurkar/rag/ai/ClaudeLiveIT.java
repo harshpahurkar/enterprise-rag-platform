@@ -12,29 +12,39 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.util.List;
 
 import org.junit.jupiter.api.Assumptions;
-import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.util.StringUtils;
 
+import com.harshpahurkar.rag.AppProperties;
 import com.harshpahurkar.rag.IntegrationTest;
 import com.harshpahurkar.rag.TestJwt;
 import com.harshpahurkar.rag.search.Retriever;
 import com.harshpahurkar.rag.search.Retriever.Retrieval;
 import com.harshpahurkar.rag.search.Retriever.RetrievedChunk;
 
-/** One real Claude call through controller, guardrails and prompts. Costs money, so it runs only with a key. */
+/**
+ * One real Claude call through controller, guardrails and prompts. Costs money, so it runs only with a key.
+ * The key resolves like the app's: the environment first, then .env (spring.config.import in application.yml).
+ * Only this class swaps the test profile's fake key for the real one; every other test keeps the fake key.
+ */
 @IntegrationTest
 @TestPropertySource(properties = "app.llm.api-key=${ANTHROPIC_API_KEY:}")
 class ClaudeLiveIT {
 
-	@BeforeAll
-	static void requireApiKey() {
-		String key = System.getenv("ANTHROPIC_API_KEY");
-		Assumptions.assumeTrue(key != null && !key.isBlank(), "ANTHROPIC_API_KEY is not set");
+	@Autowired
+	AppProperties props;
+
+	@BeforeEach
+	void requireApiKey() {
+		String key = props.llm().apiKey();
+		Assumptions.assumeTrue(StringUtils.hasText(key) && !key.equals("test-key-not-used"),
+				"ANTHROPIC_API_KEY is not set in the environment or .env");
 	}
 
 	@Autowired

@@ -58,9 +58,9 @@ Browser (React SPA) ──Bearer JWT──►  Spring Boot 4.0 jar (also serves 
 | Layer | Choice |
 |---|---|
 | Runtime | Java 21 (Temurin, installed). Maven via `mvnw` (Maven itself isn't installed) |
-| Backend | Spring Boot 4.0.0 (3.5 OSS support ends 2026-06-30): Web MVC, Security, OAuth2 Resource Server (JWT), JDBC (`JdbcClient`), Flyway, Validation |
+| Backend | Spring Boot 4.0.0 (3.5 OSS support ended 2026-06-30): Web MVC, Security, OAuth2 Resource Server (JWT), JDBC (`JdbcClient`), Flyway, Validation |
 | AI | LangChain4j 1.9.1 BOM: `langchain4j`, `langchain4j-anthropic`, `langchain4j-embeddings-bge-small-en-v15-q`, `langchain4j-document-parser-apache-tika` (beta modules are `1.9.1-beta17`). Beans wired by hand with `AiServices.builder`, no LangChain4j starter |
-| LLM | `claude-opus-4-5`. `output_config.effort` passed via `customParameters`, set to `medium` (the model's default, made explicit; try `low` later if answers feel slow). `maxTokens` 16000, 120 s timeout |
+| LLM | `claude-opus-4-5`. `output_config.effort` passed via `customParameters`, set to `medium` (the model's default, made explicit; try `low` later if answers feel slow). Server-side refusal fallback on (`beta("server-side-fallback-2026-07-01")` + `fallbacks: "default"`). `maxTokens` 16000, 120 s timeout |
 | DB | `pgvector/pgvector:0.8.1-pg18`, HNSW `vector_cosine_ops`, iterative index scans for filtered search |
 | Frontend | `create-vite` 8.2 `react-ts` template (Vite 7.2, React 19.2, TypeScript ~5.9), Tailwind 4.1 via `@tailwindcss/vite` (supports Vite 7), TanStack Query 5, lucide-react |
 | Tests | JUnit 5, Spring Boot Test, Testcontainers 2 (pgvector image), Playwright 1.57 |

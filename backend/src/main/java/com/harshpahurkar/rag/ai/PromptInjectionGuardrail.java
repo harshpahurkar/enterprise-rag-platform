@@ -21,11 +21,19 @@ public class PromptInjectionGuardrail implements InputGuardrail {
 			"\\byou\\s+are\\s+now\\b", "\\bdeveloper\\s+mode\\b", "\\bjailbreak", "</?\\s*sources\\s*>"),
 			Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
 
+	static final String BLOCKED = "The question looks like an attempt to change the assistant's instructions.";
+
+	/** AskService calls this before retrieval, so an injection is blocked even when nothing relevant is found. */
+	public static boolean looksLikeInjection(String question) {
+		return question != null && INJECTION.matcher(question).find();
+	}
+
+	/** Defence in depth: the same check again inside the AI Service, in case another caller skips AskService. */
 	@Override
 	public InputGuardrailResult validate(InputGuardrailRequest request) {
 		Object question = request.requestParams().variables().get("question");
-		if (question != null && INJECTION.matcher(question.toString()).find()) {
-			return fatal("The question looks like an attempt to change the assistant's instructions.");
+		if (question != null && looksLikeInjection(question.toString())) {
+			return fatal(BLOCKED);
 		}
 		return success();
 	}

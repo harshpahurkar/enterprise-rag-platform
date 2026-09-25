@@ -5,9 +5,15 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.util.List;
-import java.util.Set;
 import java.util.stream.IntStream;
 
+import org.apache.tika.exception.WriteLimitReachedException;
+import org.apache.tika.metadata.Metadata;
+import org.apache.tika.parser.AutoDetectParser;
+import org.apache.tika.parser.ParseContext;
+import org.apache.tika.sax.BodyContentHandler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -17,6 +23,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.harshpahurkar.rag.AppProperties;
 import com.harshpahurkar.rag.search.PgVector;
+import com.harshpahurkar.rag.security.Roles;
 
 import dev.langchain4j.data.document.BlankDocumentException;
 import dev.langchain4j.data.document.Document;
@@ -31,7 +38,13 @@ import dev.langchain4j.model.embedding.EmbeddingModel;
 @Service
 public class IngestionService {
 
-	static final Set<String> VALID_ROLES = Set.of("ADMIN", "HR", "FINANCE", "LEGAL", "ENGINEERING", "EMPLOYEE");
+	private static final Logger log = LoggerFactory.getLogger(IngestionService.class);
+
+	/** Text Tika may extract from one upload. A small zip or PDF can expand to far more text than its size. */
+	private static final int MAX_TEXT_CHARS = 5_000_000;
+
+	/** Each chunk is embedded and stored, so this bounds the work and rows one upload can cost. */
+	private static final int MAX_CHUNKS = 2000;
 
 	private static final String SELECT_VIEW = """
 			SELECT d.id, d.title, d.filename, d.content_type, d.allowed_roles, d.uploaded_by, d.created_at,
@@ -42,7 +55,9 @@ public class IngestionService {
 	private record Created(long id, OffsetDateTime at) {
 	}
 
-	private final ApacheTikaDocumentParser parser = new ApacheTikaDocumentParser();
+	/** The default parser with a write limit. (The 4-argument form of this constructor is deprecated for removal.) */
+	private final ApacheTikaDocumentParser parser = new ApacheTikaDocumentParser(AutoDetectParser::new,
+			() -> new BodyContentHandler(MAX_TEXT_CHARS), Metadata::new, ParseContext::new, false);
 
 	private final DocumentSplitter splitter;
 
@@ -66,12 +81,14 @@ public class IngestionService {
 	public DocumentView ingest(String title, String filename, String contentType, InputStream content,
 			List<String> allowedRoles, String uploadedBy) {
 		if (allowedRoles == null || allowedRoles.isEmpty()) {
-			throw badRequest("allowedRoles must name at least one role " + VALID_ROLES);
+			throw badRequest("allowedRoles must name at least one role " + Roles.ALL);
 		}
-		List<String> unknown = allowedRoles.stream().filter(r -> !VALID_ROLES.contains(r)).toList();
+		List<String> unknown = allowedRoles.stream().filter(r -> !Roles.ALL.contains(r)).toList();
 		if (!unknown.isEmpty()) {
-			throw badRequest("Unknown role(s) " + unknown + "; valid roles are " + VALID_ROLES);
+			throw badRequest("Unknown role(s) " + unknown + "; valid roles are " + Roles.ALL);
 		}
+		// Parse, split and embed before the transaction, so no connection is held during the slow part and a
+		// rejected upload writes nothing.
 		Document document;
 		try {
 			document = parser.parse(content);
@@ -79,8 +96,19 @@ public class IngestionService {
 		catch (BlankDocumentException e) {
 			throw badRequest("'" + filename + "' has no extractable text");
 		}
-		// Parse, split and embed before the transaction, so no connection is held during the slow part.
+		catch (RuntimeException e) {
+			if (WriteLimitReachedException.isWriteLimitReached(e)) {
+				throw badRequest("'" + filename + "' is too large: it has more than " + MAX_TEXT_CHARS
+						+ " characters of text");
+			}
+			// Corrupt, encrypted or junk input. The cause stays in the log; the caller gets a plain 400.
+			log.warn("Tika could not parse an upload", e);
+			throw badRequest("'" + filename + "' could not be read. It may be corrupt, encrypted or not a document.");
+		}
 		List<TextSegment> segments = splitter.split(document);
+		if (segments.size() > MAX_CHUNKS) {
+			throw badRequest("'" + filename + "' is too large: it splits into more than " + MAX_CHUNKS + " chunks");
+		}
 		List<Embedding> vectors = embeddings.embedAll(segments).content();
 
 		return tx.execute(status -> {

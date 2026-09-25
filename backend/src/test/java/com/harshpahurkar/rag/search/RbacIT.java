@@ -1,6 +1,6 @@
 package com.harshpahurkar.rag.search;
 
-import static org.hamcrest.Matchers.contains;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.io.ByteArrayInputStream;
 import java.util.List;
 
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -23,8 +24,12 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import com.harshpahurkar.rag.IntegrationTest;
 import com.harshpahurkar.rag.TestJwt;
 import com.harshpahurkar.rag.document.IngestionService;
+import com.jayway.jsonpath.JsonPath;
 
-/** Role filtering is enforced in SQL, so even a k=50 candidate pool never holds a forbidden chunk. */
+/**
+ * Role filtering is enforced in SQL, so even a k=50 candidate pool never holds a forbidden chunk. Assertions look
+ * only at this class's own documents, so rows other classes leave in the shared database don't change the outcome.
+ */
 @IntegrationTest
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class RbacIT {
@@ -47,6 +52,17 @@ class RbacIT {
 			The largest client by billing was Corvane Freight. Capital expenditure was deferred to Q4.
 			""";
 
+	static final String ADMIN_TEXT = """
+			# Board succession plan
+
+			The board has named an interim chief executive should the managing partner step down. The succession
+			shortlist for chief executive is reviewed every spring by the board chair and two outside directors.
+			""";
+
+	static final String SALARY_QUESTION = "What is the salary band for a Senior Consultant?";
+
+	static final String SUCCESSION_QUESTION = "Who is on the succession shortlist for chief executive?";
+
 	@Autowired
 	MockMvc mvc;
 
@@ -60,22 +76,24 @@ class RbacIT {
 
 	long financeDoc;
 
+	long adminDoc;
+
 	@BeforeAll
 	void ingest() {
-		jdbc.sql("DELETE FROM document").update();
-		hrDoc = ingestion
-			.ingest("Salary bands", "bands.md", "text/markdown", new ByteArrayInputStream(HR_TEXT.getBytes()),
-					List.of("HR"), "rbac-test")
-			.id();
-		financeDoc = ingestion
-			.ingest("Q3 revenue", "q3.md", "text/markdown", new ByteArrayInputStream(FINANCE_TEXT.getBytes()),
-					List.of("FINANCE"), "rbac-test")
+		hrDoc = ingest("Salary bands", "bands.md", HR_TEXT, "HR");
+		financeDoc = ingest("Q3 revenue", "q3.md", FINANCE_TEXT, "FINANCE");
+		adminDoc = ingest("Succession plan", "succession.md", ADMIN_TEXT, "ADMIN");
+	}
+
+	long ingest(String title, String filename, String text, String role) {
+		return ingestion.ingest(title, filename, "text/markdown", new ByteArrayInputStream(text.getBytes()),
+				List.of(role), "rbac-test")
 			.id();
 	}
 
 	@AfterAll
 	void cleanUp() {
-		jdbc.sql("DELETE FROM document").update();
+		jdbc.sql("DELETE FROM document WHERE id IN (:ids)").param("ids", List.of(hrDoc, financeDoc, adminDoc)).update();
 	}
 
 	ResultActions search(String query, int k, RequestPostProcessor user) throws Exception {
@@ -84,38 +102,62 @@ class RbacIT {
 			.with(user)).andExpect(status().isOk()).andExpect(jsonPath("$.retrievalMs").isNumber());
 	}
 
+	List<Long> searchedDocIds(String query, RequestPostProcessor user) throws Exception {
+		return docIds(search(query, 50, user), "$.results[*].documentId");
+	}
+
+	List<Long> listedDocIds(RequestPostProcessor user) throws Exception {
+		return docIds(mvc.perform(get("/api/documents").with(user)).andExpect(status().isOk()), "$[*].id");
+	}
+
+	static List<Long> docIds(ResultActions result, String path) throws Exception {
+		List<Number> ids = JsonPath.read(result.andReturn().getResponse().getContentAsString(), path);
+		return ids.stream().map(Number::longValue).toList();
+	}
+
 	@Test
 	void financeUserNeverGetsHrChunks() throws Exception {
-		search("What is the salary band for a Senior Consultant?", 50, TestJwt.as("fin", "FINANCE", "EMPLOYEE"))
-			.andExpect(jsonPath("$.results").isNotEmpty())
-			.andExpect(jsonPath("$.results[?(@.documentId == %d)]", hrDoc).isEmpty())
-			.andExpect(jsonPath("$.results[?(@.documentId != %d)]", financeDoc).isEmpty());
+		assertThat(searchedDocIds(SALARY_QUESTION, TestJwt.as("fin", "FINANCE", "EMPLOYEE"))).contains(financeDoc)
+			.doesNotContain(hrDoc, adminDoc);
 	}
 
 	@Test
 	void hrUserGetsHrChunks() throws Exception {
-		search("What is the salary band for a Senior Consultant?", 50, TestJwt.as("hr", "HR", "EMPLOYEE"))
-			.andExpect(jsonPath("$.results[0].documentId").value(hrDoc))
-			.andExpect(jsonPath("$.results[0].title").value("Salary bands"))
-			.andExpect(jsonPath("$.results[0].content").isString())
-			.andExpect(jsonPath("$.results[0].score").isNumber())
-			.andExpect(jsonPath("$.results[?(@.documentId == %d)]", financeDoc).isEmpty());
+		search(SALARY_QUESTION, 50, TestJwt.as("hr", "HR", "EMPLOYEE"))
+			.andExpect(jsonPath("$.results[?(@.documentId == %d)].title", hrDoc)
+				.value(Matchers.hasItem("Salary bands")))
+			.andExpect(jsonPath("$.results[?(@.documentId == %d)].content", hrDoc).value(Matchers.hasItem(
+					Matchers.containsString("Senior Consultants earn between"))))
+			.andExpect(jsonPath("$.results[?(@.documentId == %d)].score", hrDoc).isNotEmpty())
+			.andExpect(jsonPath("$.results[?(@.documentId == %d)]", financeDoc).isEmpty())
+			.andExpect(jsonPath("$.results[?(@.documentId == %d)]", adminDoc).isEmpty());
 	}
 
 	@Test
-	void userInNeitherListGetsEmptyResult() throws Exception {
-		search("What is the salary band for a Senior Consultant?", 50, TestJwt.as("legal", "LEGAL", "EMPLOYEE"))
-			.andExpect(jsonPath("$.results").isEmpty());
+	void userInNeitherListGetsNoneOfTheseDocuments() throws Exception {
+		assertThat(searchedDocIds(SALARY_QUESTION, TestJwt.as("legal", "LEGAL", "EMPLOYEE")))
+			.doesNotContain(hrDoc, financeDoc, adminDoc);
+	}
+
+	@Test
+	void adminOnlyDocumentIsHiddenFromOtherRolesAndVisibleToAdmin() throws Exception {
+		var hr = TestJwt.as("hr", "HR", "EMPLOYEE");
+		assertThat(searchedDocIds(SUCCESSION_QUESTION, hr)).doesNotContain(adminDoc);
+		assertThat(listedDocIds(hr)).doesNotContain(adminDoc);
+
+		var admin = TestJwt.as("admin", "ADMIN");
+		assertThat(searchedDocIds(SUCCESSION_QUESTION, admin)).contains(adminDoc).doesNotContain(hrDoc, financeDoc);
+		assertThat(listedDocIds(admin)).contains(adminDoc).doesNotContain(hrDoc, financeDoc);
 	}
 
 	@Test
 	void documentListIsFilteredTheSameWay() throws Exception {
-		mvc.perform(get("/api/documents").with(TestJwt.as("fin", "FINANCE", "EMPLOYEE")))
-			.andExpect(jsonPath("$[*].id", contains((int) financeDoc)));
-		mvc.perform(get("/api/documents").with(TestJwt.as("hr", "HR", "EMPLOYEE")))
-			.andExpect(jsonPath("$[*].id", contains((int) hrDoc)));
-		mvc.perform(get("/api/documents").with(TestJwt.as("legal", "LEGAL", "EMPLOYEE")))
-			.andExpect(jsonPath("$").isEmpty());
+		assertThat(listedDocIds(TestJwt.as("fin", "FINANCE", "EMPLOYEE"))).contains(financeDoc)
+			.doesNotContain(hrDoc, adminDoc);
+		assertThat(listedDocIds(TestJwt.as("hr", "HR", "EMPLOYEE"))).contains(hrDoc)
+			.doesNotContain(financeDoc, adminDoc);
+		assertThat(listedDocIds(TestJwt.as("legal", "LEGAL", "EMPLOYEE"))).doesNotContain(hrDoc, financeDoc,
+				adminDoc);
 	}
 
 	@Test
@@ -140,10 +182,8 @@ class RbacIT {
 	 */
 	@Test
 	void everyPooledConnectionKeepsFilteredSearchOnTheIndex() {
-		org.assertj.core.api.Assertions.assertThat(jdbc.sql("SHOW hnsw.iterative_scan").query(String.class).single())
-			.isEqualTo("strict_order");
-		org.assertj.core.api.Assertions.assertThat(jdbc.sql("SHOW plan_cache_mode").query(String.class).single())
-			.isEqualTo("force_custom_plan");
+		assertThat(jdbc.sql("SHOW hnsw.iterative_scan").query(String.class).single()).isEqualTo("strict_order");
+		assertThat(jdbc.sql("SHOW plan_cache_mode").query(String.class).single()).isEqualTo("force_custom_plan");
 	}
 
 }

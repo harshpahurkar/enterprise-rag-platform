@@ -35,7 +35,8 @@ public class AiConfig {
 
 	/**
 	 * Claude, with no temperature/top_p/top_k (the defaults are fine) and no thinking config (it can't be
-	 * turned off). Effort goes in output_config. Without a key the app still starts (search
+	 * turned off). Effort goes in output_config. The fallback beta lets the API retry a request a safety
+	 * classifier declined on another model instead of failing it. Without a key the app still starts (search
 	 * needs no LLM) and only /api/ask fails, as a 503.
 	 */
 	@Bean
@@ -54,7 +55,8 @@ public class AiConfig {
 			.modelName(llm.model())
 			.maxTokens(llm.maxTokens())
 			.timeout(llm.timeout())
-			.customParameters(Map.of("output_config", Map.of("effort", llm.effort())))
+			.beta("server-side-fallback-2026-07-01")
+			.customParameters(Map.of("output_config", Map.of("effort", llm.effort()), "fallbacks", "default"))
 			.build();
 	}
 

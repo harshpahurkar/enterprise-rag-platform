@@ -15,6 +15,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.User;
@@ -41,8 +42,11 @@ import com.nimbusds.jose.jwk.source.ImmutableSecret;
  * Stateless JWT security. Tokens are HMAC-signed by this app ({@link AuthController}) and carry only identity:
  * subject, issuer and expiry. Roles are read from {@code app_user} on every request, so a demotion or deletion
  * applies to tokens already issued. Document-level access is enforced separately, inside the retrieval SQL.
+ * Method security repeats the ADMIN check on the controller methods that write, so a URL rule that drifts can't
+ * open them.
  */
 @Configuration
+@EnableMethodSecurity
 public class SecurityConfig {
 
 	static final String ISSUER = "rag-platform";

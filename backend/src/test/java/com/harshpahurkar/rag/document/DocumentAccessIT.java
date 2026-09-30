@@ -57,7 +57,8 @@ class DocumentAccessIT {
 	@Test
 	@WithMockUser(username = "hr.user", roles = "HR")
 	void deleteMethodDeniesNonAdmin() {
-		assertThatThrownBy(() -> documents.delete(hrDoc)).isInstanceOf(AccessDeniedException.class);
+		var auth = SecurityContextHolder.getContext().getAuthentication();
+		assertThatThrownBy(() -> documents.delete(hrDoc, auth)).isInstanceOf(AccessDeniedException.class);
 		assertThat(exists(hrDoc)).isTrue();
 	}
 

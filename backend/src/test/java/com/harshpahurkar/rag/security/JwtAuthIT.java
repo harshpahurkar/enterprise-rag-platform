@@ -266,6 +266,40 @@ class JwtAuthIT {
 		listDocuments(header + "." + claims + ".").andExpect(status().isUnauthorized());
 	}
 
+	/**
+	 * Delete runs {@code WHERE id = ? AND allowed_roles && callerRoles}, with the roles read from app_user now, so a
+	 * document the admin can no longer read answers exactly like one that doesn't exist.
+	 */
+	@Test
+	void adminDeleteIsScopedToTheAdminsCurrentRoles() throws Exception {
+		long doc = ingest("JWT delete scope memo", "FINANCE");
+		jdbc.sql("UPDATE app_user SET roles = ARRAY['ADMIN', 'FINANCE'] WHERE username = 'jwt.admin'").update();
+		String token = login("jwt.admin");
+		jdbc.sql("UPDATE app_user SET roles = ARRAY['ADMIN', 'HR'] WHERE username = 'jwt.admin'").update();
+
+		String hidden = deleteDocument(doc, token).andExpect(status().isNotFound())
+			.andReturn()
+			.getResponse()
+			.getContentAsString();
+		assertThat(jdbc.sql("SELECT count(*) FROM document WHERE id = ?").param(doc).query(Long.class).single())
+			.isOne();
+		String missing = deleteDocument(Long.MAX_VALUE, token).andExpect(status().isNotFound())
+			.andReturn()
+			.getResponse()
+			.getContentAsString();
+		var parser = JsonMapper.builder().build();
+		assertThat(parser.readTree(hidden).get("detail")).isEqualTo(parser.readTree(missing).get("detail"));
+
+		jdbc.sql("UPDATE app_user SET roles = ARRAY['ADMIN', 'FINANCE'] WHERE username = 'jwt.admin'").update();
+		deleteDocument(doc, token).andExpect(status().isNoContent());
+		assertThat(jdbc.sql("SELECT count(*) FROM document WHERE id = ?").param(doc).query(Long.class).single())
+			.isZero();
+	}
+
+	ResultActions deleteDocument(long id, String token) throws Exception {
+		return mvc.perform(delete("/api/documents/{id}", id).header(HttpHeaders.AUTHORIZATION, "Bearer " + token));
+	}
+
 	@Test
 	void nonNumericDocumentIdIs400() throws Exception {
 		mvc.perform(delete("/api/documents/abc").header(HttpHeaders.AUTHORIZATION, "Bearer " + login("jwt.admin")))

@@ -87,11 +87,12 @@ class IngestionIT {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$[?(@.id == %d)]", id).isEmpty());
 
-		mvc.perform(delete("/api/documents/{id}", id).with(TestJwt.as("admin", "ADMIN")))
+		// Delete is scoped by the caller's roles too, so the admin holds the document's roles, as the demo admin does.
+		mvc.perform(delete("/api/documents/{id}", id).with(TestJwt.as("admin", "ADMIN", "HR", "EMPLOYEE")))
 			.andExpect(status().isNoContent());
 		assertThat(jdbc.sql("SELECT count(*) FROM chunk WHERE document_id = ?").param(id).query(Long.class).single())
 			.isZero();
-		mvc.perform(delete("/api/documents/{id}", id).with(TestJwt.as("admin", "ADMIN")))
+		mvc.perform(delete("/api/documents/{id}", id).with(TestJwt.as("admin", "ADMIN", "HR", "EMPLOYEE")))
 			.andExpect(status().isNotFound());
 	}
 

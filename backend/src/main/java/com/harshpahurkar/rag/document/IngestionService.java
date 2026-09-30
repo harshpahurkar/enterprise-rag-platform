@@ -143,10 +143,15 @@ public class IngestionService {
 			.list();
 	}
 
-	/** Chunks go with it (ON DELETE CASCADE). */
-	public void delete(long id) {
-		if (jdbc.sql("DELETE FROM document WHERE id = ?").param(id).update() == 0) {
-			throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Document " + id + " not found");
+	/**
+	 * Deletes only a document the caller can read, so one outside their roles answers the same 404 as one that
+	 * doesn't exist. Chunks go with it (ON DELETE CASCADE).
+	 */
+	public void delete(long id, List<String> roles) {
+		if (jdbc.sql("DELETE FROM document WHERE id = ? AND allowed_roles && ?::text[]")
+			.params(id, roles.toArray(String[]::new))
+			.update() == 0) {
+			throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Document not found");
 		}
 	}
 

@@ -9,3 +9,9 @@ app:
       requests: 100000
     ask:
       requests: 100000
+    ask-global:
+      requests: 100000
+    search:
+      requests: 100000
+    upload:
+      requests: 100000

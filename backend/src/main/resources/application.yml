@@ -52,3 +52,12 @@ app:
     ask: # per user
       requests: 20
       window: 1h
+    ask-global: # all users together: a ceiling on LLM spend (at most 2 model calls per ask)
+      requests: 500
+      window: 1d
+    search: # per user; each search embeds the query on the app's CPU
+      requests: 120
+      window: 1m
+    upload: # per user; each upload is parsed, split and embedded
+      requests: 30
+      window: 1h

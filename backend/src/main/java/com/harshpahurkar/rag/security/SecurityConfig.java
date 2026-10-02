@@ -34,6 +34,9 @@ import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.resource.InvalidBearerTokenException;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.header.writers.CrossOriginOpenerPolicyHeaderWriter.CrossOriginOpenerPolicy;
+import org.springframework.security.web.header.writers.CrossOriginResourcePolicyHeaderWriter.CrossOriginResourcePolicy;
+import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy;
 
 import com.harshpahurkar.rag.AppProperties;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
@@ -51,8 +54,13 @@ public class SecurityConfig {
 
 	static final String ISSUER = "rag-platform";
 
-	private static final String CSP = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
-			+ "frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
+	/**
+	 * No inline script or style: the built SPA is one script and one stylesheet, and React's {@code style} prop
+	 * writes through the CSSOM, which {@code style-src 'self'} allows.
+	 */
+	private static final String CSP = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
+			+ "font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; "
+			+ "frame-ancestors 'none'";
 
 	@Bean
 	SecurityFilterChain api(HttpSecurity http, UserDetailsService users) throws Exception {
@@ -69,7 +77,11 @@ public class SecurityConfig {
 				.anyRequest()
 				.permitAll()) // the built SPA's static files
 			.oauth2ResourceServer(rs -> rs.jwt(jwt -> jwt.jwtAuthenticationConverter(rolesFromDatabase(users))))
-			.headers(h -> h.contentSecurityPolicy(csp -> csp.policyDirectives(CSP)));
+			.headers(h -> h.contentSecurityPolicy(csp -> csp.policyDirectives(CSP))
+				.referrerPolicy(r -> r.policy(ReferrerPolicy.NO_REFERRER))
+				.permissionsPolicyHeader(p -> p.policy("camera=(), microphone=(), geolocation=(), payment=()"))
+				.crossOriginOpenerPolicy(c -> c.policy(CrossOriginOpenerPolicy.SAME_ORIGIN))
+				.crossOriginResourcePolicy(c -> c.policy(CrossOriginResourcePolicy.SAME_ORIGIN)));
 		return http.build();
 	}
 

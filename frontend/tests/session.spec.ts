@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page } from './fixtures.ts'
 
 const PASSWORD = process.env.E2E_PASSWORD ?? 'demo-password'
 const ENDED = 'Your session ended. Sign in again to continue.'

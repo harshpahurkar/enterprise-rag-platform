@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page } from './fixtures.ts'
 
 const PASSWORD = process.env.E2E_PASSWORD ?? 'demo-password'
 // The seeded HR document (hr-compensation-2026) has "compensation" in its title.

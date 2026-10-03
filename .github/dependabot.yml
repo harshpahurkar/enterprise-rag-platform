@@ -4,6 +4,9 @@ updates:
     directory: /backend
     schedule:
       interval: weekly
+    # Wait a week before proposing a new release, so a compromised version is usually caught first.
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     groups:
       maven-minor-patch:
@@ -12,6 +15,9 @@ updates:
     directory: /frontend
     schedule:
       interval: weekly
+    # Wait a week before proposing a new release, so a compromised version is usually caught first.
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     groups:
       npm-minor-patch:
@@ -20,6 +26,9 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # Wait a week before proposing a new release, so a compromised version is usually caught first.
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     groups:
       docker-minor-patch:
@@ -28,6 +37,9 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # Wait a week before proposing a new release, so a compromised version is usually caught first.
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     groups:
       actions-minor-patch:

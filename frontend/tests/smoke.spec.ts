@@ -23,6 +23,21 @@ async function search(page: Page, query: string) {
 const resultTitles = (page: Page) =>
   page.getByRole('list', { name: 'Search results' }).getByRole('heading').allTextContents()
 
+test('the login page lists the demo accounts without printing the password', async ({ page }) => {
+  await page.goto('/')
+  const hint = page.getByRole('region', { name: 'Demo accounts' })
+  await expect(hint.getByRole('button', { name: 'engineer' })).toBeVisible()
+  await expect(hint).toContainText('DEMO_PASSWORD')
+  expect(await page.content()).not.toContain(PASSWORD)
+})
+
+test('without the demo endpoint the login page shows no demo hint', async ({ page }) => {
+  await page.route('**/api/auth/demo-accounts', (route) => route.fulfill({ status: 404, json: { detail: 'Not Found' } }))
+  await page.goto('/')
+  await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Demo accounts' })).toHaveCount(0)
+})
+
 test('engineer searches the runbook and sees ranked results with latency', async ({ page }) => {
   await signIn(page, 'engineer')
   await search(page, 'how do we roll back a deploy')

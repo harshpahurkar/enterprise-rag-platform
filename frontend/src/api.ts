@@ -6,6 +6,12 @@ export interface Session {
   roles: string[]
 }
 
+/** A seeded demo account. Served only under the backend's demo profile, and never with a password. */
+export interface DemoAccount {
+  username: string
+  roles: string[]
+}
+
 export interface DocumentInfo {
   id: number
   title: string
@@ -127,6 +133,7 @@ const json = (method: string, body: unknown): RequestInit => ({ method, body: JS
 
 export const api = {
   login: (username: string, password: string) => request<Session>(LOGIN_PATH, json('POST', { username, password })),
+  demoAccounts: () => request<DemoAccount[]>('/api/auth/demo-accounts'),
   documents: () => request<DocumentInfo[]>('/api/documents'),
   upload: (form: FormData) => request<DocumentInfo>('/api/documents', { method: 'POST', body: form }),
   deleteDocument: (id: number) => request<void>(`/api/documents/${id}`, { method: 'DELETE' }),

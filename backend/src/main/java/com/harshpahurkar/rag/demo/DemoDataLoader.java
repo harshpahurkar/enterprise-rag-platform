@@ -3,7 +3,6 @@ package com.harshpahurkar.rag.demo;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
-import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,12 +32,16 @@ public class DemoDataLoader implements ApplicationRunner {
 
 	private static final Logger log = LoggerFactory.getLogger(DemoDataLoader.class);
 
-	private static final Map<String, List<String>> USERS = Map.of(
-			"admin", Roles.ALL,
-			"hr.manager", List.of("HR", "EMPLOYEE"),
-			"finance.analyst", List.of("FINANCE", "EMPLOYEE"),
-			"legal.counsel", List.of("LEGAL", "EMPLOYEE"),
-			"engineer", List.of("ENGINEERING", "EMPLOYEE"));
+	/** A demo account as the login page lists it: no password. */
+	record DemoUser(String username, List<String> roles) {
+	}
+
+	/** In the order the login page lists them. */
+	static final List<DemoUser> USERS = List.of(new DemoUser("admin", Roles.ALL),
+			new DemoUser("hr.manager", List.of("HR", "EMPLOYEE")),
+			new DemoUser("finance.analyst", List.of("FINANCE", "EMPLOYEE")),
+			new DemoUser("legal.counsel", List.of("LEGAL", "EMPLOYEE")),
+			new DemoUser("engineer", List.of("ENGINEERING", "EMPLOYEE")));
 
 	record ManifestEntry(String file, String title, List<String> allowedRoles) {
 	}
@@ -67,11 +70,13 @@ public class DemoDataLoader implements ApplicationRunner {
 
 	@Override
 	public void run(ApplicationArguments args) throws IOException {
-		USERS.forEach((username, roles) -> jdbc.sql("""
+		USERS.forEach(user -> jdbc.sql("""
 				INSERT INTO app_user (username, password_hash, roles) VALUES (?, ?, ?::text[])
 				ON CONFLICT (username) DO NOTHING
-				""").params(username, encoder.encode(props.demo().password()), roles.toArray(String[]::new)).update());
-		log.info("Demo users present: {} (existing ones keep their password and roles)", USERS.keySet());
+				""").params(user.username(), encoder.encode(props.demo().password()), user.roles().toArray(String[]::new))
+			.update());
+		log.info("Demo users present: {} (existing ones keep their password and roles)",
+				USERS.stream().map(DemoUser::username).toList());
 
 		if (jdbc.sql("SELECT count(*) FROM document").query(Long.class).single() > 0) {
 			log.info("Documents already present, skipping demo documents");

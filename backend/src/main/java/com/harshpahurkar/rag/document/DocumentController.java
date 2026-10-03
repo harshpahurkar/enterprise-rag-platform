@@ -23,7 +23,7 @@ import com.harshpahurkar.rag.security.SecurityAudit;
 
 import jakarta.validation.constraints.Size;
 
-/** Upload and delete are ADMIN-only, here and in SecurityConfig's URL rules; listing is filtered to the caller's roles. */
+/** Upload and delete are ADMIN-only, here and in SecurityConfig; listing is filtered to the caller's roles. */
 @RestController
 @RequestMapping("/api/documents")
 class DocumentController {

@@ -12,6 +12,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.security.authentication.AuthenticationEventPublisher;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -33,6 +34,8 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.resource.InvalidBearerTokenException;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.web.BearerTokenAuthenticationEntryPoint;
+import org.springframework.security.oauth2.server.resource.web.access.BearerTokenAccessDeniedHandler;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.header.writers.CrossOriginOpenerPolicyHeaderWriter.CrossOriginOpenerPolicy;
 import org.springframework.security.web.header.writers.CrossOriginResourcePolicyHeaderWriter.CrossOriginResourcePolicy;
@@ -64,6 +67,9 @@ public class SecurityConfig {
 
 	@Bean
 	SecurityFilterChain api(HttpSecurity http, UserDetailsService users) throws Exception {
+		// The resource server's own 401 and 403 responses, each logged to SECURITY_AUDIT first.
+		var entryPoint = SecurityAudit.audited(new BearerTokenAuthenticationEntryPoint());
+		var accessDenied = SecurityAudit.audited(new BearerTokenAccessDeniedHandler());
 		http.csrf(csrf -> csrf.disable()) // bearer tokens only, no cookies: nothing for CSRF to ride on
 			.sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 			.authorizeHttpRequests(auth -> auth.requestMatchers(HttpMethod.POST, "/api/auth/login")
@@ -76,7 +82,9 @@ public class SecurityConfig {
 				.authenticated()
 				.anyRequest()
 				.permitAll()) // the built SPA's static files
-			.oauth2ResourceServer(rs -> rs.jwt(jwt -> jwt.jwtAuthenticationConverter(rolesFromDatabase(users))))
+			.exceptionHandling(e -> e.authenticationEntryPoint(entryPoint).accessDeniedHandler(accessDenied))
+			.oauth2ResourceServer(rs -> rs.authenticationEntryPoint(entryPoint)
+				.jwt(jwt -> jwt.jwtAuthenticationConverter(rolesFromDatabase(users))))
 			.headers(h -> h.contentSecurityPolicy(csp -> csp.policyDirectives(CSP))
 				.referrerPolicy(r -> r.policy(ReferrerPolicy.NO_REFERRER))
 				.permissionsPolicyHeader(p -> p.policy("camera=(), microphone=(), geolocation=(), payment=()"))
@@ -139,11 +147,15 @@ public class SecurityConfig {
 			.orElseThrow(() -> new UsernameNotFoundException(username));
 	}
 
+	/** Publishes login success and failure events, which {@link SecurityAudit} logs. */
 	@Bean
-	AuthenticationManager authenticationManager(UserDetailsService users, PasswordEncoder encoder) {
+	AuthenticationManager authenticationManager(UserDetailsService users, PasswordEncoder encoder,
+			AuthenticationEventPublisher events) {
 		var provider = new DaoAuthenticationProvider(users);
 		provider.setPasswordEncoder(encoder);
-		return new ProviderManager(List.of(provider));
+		var manager = new ProviderManager(List.of(provider));
+		manager.setAuthenticationEventPublisher(events);
+		return manager;
 	}
 
 }

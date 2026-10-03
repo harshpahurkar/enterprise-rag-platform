@@ -9,7 +9,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.mock.web.MockMultipartFile;
@@ -24,6 +27,7 @@ import com.harshpahurkar.rag.TestJwt;
 @IntegrationTest
 @TestPropertySource(properties = { "app.rate-limit.login.requests=10", "app.rate-limit.ask.requests=2",
 		"app.rate-limit.search.requests=2", "app.rate-limit.upload.requests=2" })
+@ExtendWith(OutputCaptureExtension.class)
 class RateLimitIT {
 
 	@Autowired
@@ -35,7 +39,7 @@ class RateLimitIT {
 	}
 
 	@Test
-	void eleventhLoginInAWindowIs429WithRetryAfter() throws Exception {
+	void eleventhLoginInAWindowIs429WithRetryAfter(CapturedOutput output) throws Exception {
 		for (int i = 0; i < 10; i++) {
 			mvc.perform(badLogin()).andExpect(status().isUnauthorized());
 		}
@@ -46,6 +50,8 @@ class RateLimitIT {
 			.andReturn()
 			.getResponse();
 		assertThat(Integer.parseInt(res.getHeader("Retry-After"))).isBetween(1, 60);
+		// The limit and what it counts by, never the key itself (here the client IP).
+		assertThat(SecurityAuditIT.audit(output)).contains("event=rate_limited limit=login key=ip path=/api/auth/login");
 	}
 
 	@Test

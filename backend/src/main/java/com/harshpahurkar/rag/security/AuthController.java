@@ -11,6 +11,7 @@ import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
+import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.harshpahurkar.rag.AppProperties;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -46,11 +48,14 @@ class AuthController {
 
 	/**
 	 * Bad credentials surface as 401 ProblemDetail via {@link ApiExceptionHandler}. The token holds no roles (they are
-	 * read from the database per request); the body lists them for the UI.
+	 * read from the database per request); the body lists them for the UI. The request details carry the client IP
+	 * into the login events that {@link SecurityAudit} logs.
 	 */
 	@PostMapping("/login")
-	LoginResponse login(@Valid @RequestBody LoginRequest req) {
-		Authentication user = auth.authenticate(new UsernamePasswordAuthenticationToken(req.username(), req.password()));
+	LoginResponse login(@Valid @RequestBody LoginRequest req, HttpServletRequest request) {
+		var attempt = UsernamePasswordAuthenticationToken.unauthenticated(req.username(), req.password());
+		attempt.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+		Authentication user = auth.authenticate(attempt);
 		Instant now = Instant.now();
 		JwtClaimsSet claims = JwtClaimsSet.builder()
 			.issuer(SecurityConfig.ISSUER)

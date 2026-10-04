@@ -5,6 +5,7 @@
 **Semantic search and cited answers over company documents, with role-based access enforced inside the vector query.**
 
 [![CI](https://github.com/harshpahurkar/enterprise-rag-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/harshpahurkar/enterprise-rag-platform/actions/workflows/ci.yml)
+[![Security](https://github.com/harshpahurkar/enterprise-rag-platform/actions/workflows/security.yml/badge.svg)](https://github.com/harshpahurkar/enterprise-rag-platform/actions/workflows/security.yml)
 ![Java 21](https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&logoColor=white)
 ![Spring Boot 4.1](https://img.shields.io/badge/Spring_Boot-4.1-6DB33F?logo=springboot&logoColor=white)
 ![React 19](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
@@ -24,6 +25,7 @@ Admins upload documents (PDF, DOCX, PPTX, HTML, Markdown, plain text and other f
 - 18 of 18 eval questions find the expected document at rank 1 ([`RetrievalQualityIT`](backend/src/test/java/com/harshpahurkar/rag/search/RetrievalQualityIT.java)).
 - Chunks scoring below 0.6 are dropped before Claude sees anything, and a question with nothing left is refused without an LLM call ([`AskFlowIT`](backend/src/test/java/com/harshpahurkar/rag/ai/AskFlowIT.java)). The threshold sits between the lowest on-topic top-1 score on the eval set, 0.652, and the highest off-topic one, 0.544 ([`RetrievalQualityIT`](backend/src/test/java/com/harshpahurkar/rag/search/RetrievalQualityIT.java)).
 - Three LangChain4j guardrails block prompt injection, mask personal data before it leaves for the Anthropic API, and re-prompt once, then reject, an answer without valid citations ([`GuardrailsTest`](backend/src/test/java/com/harshpahurkar/rag/ai/GuardrailsTest.java)).
+- Security is tested, not assumed: 132 backend tests and 10 Playwright tests cover real-token RBAC, rate limits, audit logging, error leakage and headers, and every browser test fails on a CSP violation. Semgrep, gitleaks and Trivy report no findings ([threat model](docs/threat-model.md)).
 - `docker compose up --build` starts the whole stack with five demo users and six demo documents. Search works with no API key.
 
 ## Quickstart
@@ -59,7 +61,7 @@ The backend reads the repo-root `.env` itself (`spring.config.import` in `applic
 
 ## Demo users and data
 
-Every demo user has the password `demo-password`, or the value of `DEMO_PASSWORD` if you set it. The demo profile re-applies passwords and roles on each start. The documents belong to a fictional consulting firm, Halvorsen Pike Advisory; they are listed in [`manifest.json`](backend/src/main/resources/demo-docs/manifest.json) and load only when the document table is empty.
+Every demo user has the password `demo-password`, or the value of `DEMO_PASSWORD` if you set it. The demo profile creates missing users on start and never resets an existing one. The sign-in page lists the demo usernames only while the demo profile is active, and never shows a password. The documents belong to a fictional consulting firm, Halvorsen Pike Advisory; they are listed in [`manifest.json`](backend/src/main/resources/demo-docs/manifest.json) and load only when the document table is empty.
 
 | User | Roles | Documents visible |
 |---|---|---|
@@ -85,11 +87,15 @@ The documents contain fake personal data (`@example.com` addresses, 555 phone nu
 <table>
 <tr>
 <td width="50%"><img src="docs/screenshots/ask-refused.png" alt="Ask view: an off-topic question about sourdough is refused, generation 0 ms"><br><sub>An off-topic question is refused by the score gate. Generation time is 0 ms because Claude is never called.</sub></td>
-<td width="50%"><img src="docs/screenshots/ask-blocked.png" alt="Ask view: a prompt-injection attempt is blocked"><br><sub>Prompt-injection attempt blocked.</sub></td>
+<td width="50%"><img src="docs/screenshots/ask-blocked.png" alt="Ask view: a prompt-injection attempt is blocked"><br><sub>A prompt-injection attempt is blocked with a 422 before retrieval runs.</sub></td>
 </tr>
 <tr>
 <td width="50%"><img src="docs/screenshots/documents-engineer.png" alt="Documents view as engineer: three readable documents"><br><sub><code>engineer</code> sees 3 of the 6 documents and has no upload form.</sub></td>
 <td width="50%"><img src="docs/screenshots/documents-admin-dark.png" alt="Documents view as admin in dark mode with the upload form and role picker"><br><sub><code>admin</code> in dark mode: upload with a role picker, and delete on every row.</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/screenshots/login.png" alt="Sign-in page with the demo accounts list"><br><sub>Sign-in. The demo account list comes from an endpoint that exists only under the demo profile.</sub></td>
+<td width="50%"></td>
 </tr>
 </table>
 
@@ -129,7 +135,7 @@ flowchart LR
 
 **React SPA.** Built by Vite and copied into the jar's static resources by the [Dockerfile](Dockerfile), so the app is one process on one port. It keeps the bearer token in `sessionStorage` and renders answers as plain text, with each `[n]` turned into a button that jumps to its source card.
 
-**Spring Security.** Validates the HS256 JWT on every `/api/**` request except login (issuer `rag-platform`, `exp` required, 1 hour lifetime) and loads the caller's roles from the `app_user` table each time, so a role change or a deleted user takes effect on the next request. Login is rate limited per IP and Ask per user.
+**Spring Security.** Validates the HS256 JWT on every `/api/**` request except login (issuer `rag-platform`, `exp` required, 1 hour lifetime) and loads the caller's roles from the `app_user` table each time, so a role change or a deleted user takes effect on the next request. Upload and delete also carry a method-level `@PreAuthorize("hasRole('ADMIN')")`. Login is rate limited per IP; search, upload and Ask per user; and Ask has a global daily cap as a spend ceiling. Security events go to a separate `SECURITY_AUDIT` log.
 
 **Ingestion.** Apache Tika extracts text (capped at 5,000,000 characters), LangChain4j's `DocumentSplitters.recursive(1000, 150)` splits it by paragraph, then line, sentence and word, and BGE-small embeds each chunk. Parsing and embedding happen before the database transaction, which then inserts the document row and all its chunks together. Uploads are capped at 25 MB and 2,000 chunks.
 
@@ -156,7 +162,7 @@ sequenceDiagram
     participant C as Claude
     U->>API: POST /api/ask with Bearer JWT
     API->>PG: load caller roles
-    Note over API: rate limit, 20 asks per hour per user
+    Note over API: rate limits, 20 asks per hour per user and 500 per day in total
     API->>API: injection check on the raw question
     alt looks like an injection
         API-->>U: 422, no retrieval, no LLM call
@@ -198,7 +204,7 @@ There is no "admin sees everything" branch in the code. The demo `admin` reads a
 Where the filtering happens:
 
 1. **On each request**, Spring Security verifies the token and loads the caller's current roles from `app_user`.
-2. **On writes**, `SecurityConfig` requires ADMIN for `POST /api/documents` and `DELETE /api/documents/{id}`. An upload must name at least one of the six roles; the schema also has `CHECK (cardinality(allowed_roles) > 0)`.
+2. **On writes**, `SecurityConfig` requires ADMIN for `POST /api/documents` and `DELETE /api/documents/{id}`, and the controller methods repeat the check with `@PreAuthorize`. Delete is also scoped by role (`WHERE id = ? AND allowed_roles && :roles`), so a document outside the caller's roles returns the same 404 as a missing one. An upload must name at least one of the six roles; the schema also has `CHECK (cardinality(allowed_roles) > 0)`.
 3. **On reads**, the role check is in the same statement as the vector search, in [`Retriever`](backend/src/main/java/com/harshpahurkar/rag/search/Retriever.java):
 
    ```sql
@@ -213,7 +219,17 @@ Where the filtering happens:
    Nothing is filtered in Java afterwards, so a forbidden chunk never leaves the database. HNSW applies a `WHERE` clause after the index scan, which can leave fewer than `k` rows; `hnsw.iterative_scan = strict_order` makes it keep scanning until `k` rows pass. The document list uses the same `&&` overlap.
 4. **In the prompt**, Claude sees only chunks from step 3 that cleared the score gate, with personal data masked.
 
-Passwords are BCrypt hashes, and an unknown user gets the same 401 message as a wrong password. No cookies are used, so CSRF protection is off. Every response carries a `Content-Security-Policy` built on `default-src 'self'` with `frame-ancestors 'none'`. Anthropic errors are logged on the server and the caller gets a fixed message. The runtime container runs as a non-root user.
+Other controls, each covered by a test or a CI scan:
+
+- **Login.** BCrypt hashes. An unknown user gets the same 401 message and timing as a wrong password. 10 attempts per minute per IP.
+- **Tokens.** HS256 only, issuer and `exp` required, 1 hour lifetime, sent as a bearer header. No cookies, so there is no CSRF surface.
+- **Headers.** A strict CSP (`default-src 'self'`, no `unsafe-inline`, `object-src 'none'`, `frame-ancestors 'none'`), plus `Referrer-Policy: no-referrer`, `Permissions-Policy`, COOP, CORP, `nosniff` and `Cache-Control: no-store`. No CORS grant, so other origins can't read the API.
+- **Errors.** Problem details with fixed messages. A 500 never carries an exception message, class name or stack trace, and Anthropic errors become a generic 502.
+- **Audit log.** Logins, rejected tokens, denied requests, uploads, deletes, guardrail blocks and rate-limit hits, one line each, with control characters neutralized. Passwords, tokens, questions and document text are never logged.
+- **Container.** Non-root user, read-only root filesystem, all Linux capabilities dropped, `no-new-privileges`, and a `noexec` `/tmp`. The ONNX and tokenizer native libraries ship inside the image, so nothing executable is written at runtime.
+- **Supply chain.** CI runs CodeQL, Semgrep, gitleaks, OSV-Scanner, `npm audit` and a Trivy image scan. Every action is pinned to a commit SHA, and Dependabot waits 7 days before proposing a release.
+
+The full analysis, with STRIDE tables per component, an attack tree and the residual risks, is in [docs/threat-model.md](docs/threat-model.md). To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
 ## Guardrails
 
@@ -261,13 +277,14 @@ Limitations: the chunk vectors are random, so the index has none of the cluster 
 | Method | Path | Access | Body | Returns |
 |---|---|---|---|---|
 | POST | `/api/auth/login` | public, 10 per minute per IP | `{username, password}` | `{token, username, roles}` |
+| GET | `/api/auth/demo-accounts` | public, demo profile only | | demo usernames and roles, never passwords; 404 outside the demo profile |
 | GET | `/api/documents` | signed in | | documents the caller can read, newest first |
-| POST | `/api/documents` | ADMIN | multipart: `file`, `title` (defaults to the filename), `allowedRoles` | 201 with the document and its chunk count |
-| DELETE | `/api/documents/{id}` | ADMIN | | 204; its chunks are deleted too |
-| POST | `/api/search` | signed in | `{query, k?}`, k from 1 to 50, default 10 | `{results, retrievalMs}` |
-| POST | `/api/ask` | signed in, 20 per hour per user | `{question}`, up to 1,000 characters | `{answer, refused, sources, retrievalMs, generationMs}` |
+| POST | `/api/documents` | ADMIN, 30 per hour | multipart: `file`, `title` (defaults to the filename), `allowedRoles` | 201 with the document and its chunk count |
+| DELETE | `/api/documents/{id}` | ADMIN | | 204 and its chunks go too; 404 if missing or outside the caller's roles |
+| POST | `/api/search` | signed in, 120 per minute | `{query, k?}`, k from 1 to 50, default 10 | `{results, retrievalMs}` |
+| POST | `/api/ask` | signed in, 20 per hour per user, 500 per day in total | `{question}`, up to 1,000 characters | `{answer, refused, sources, retrievalMs, generationMs}` |
 
-Errors are problem details (`application/problem+json`): 400 for invalid input, 401 for a bad login or a missing or expired token, 403 when a non-admin writes, 404 for an unknown document, 422 when a guardrail blocks, 502 when the Anthropic call fails, and 503 when no API key is configured.
+Errors are problem details (`application/problem+json`): 400 for invalid input, 401 for a bad login or a missing or expired token, 403 when a non-admin writes, 404 for an unknown document, 422 when a guardrail blocks, 429 with `Retry-After` when a rate limit is hit, 502 when the Anthropic call fails, and 503 when no API key is configured.
 
 ```bash
 TOKEN=$(curl -s http://localhost:8080/api/auth/login -H 'Content-Type: application/json' \
@@ -292,7 +309,7 @@ Set these in `.env` ([`.env.example`](.env.example) documents each one). Docker 
 | `DB_URL` | `jdbc:postgresql://localhost:5432/rag` | no | JDBC URL. Compose sets `jdbc:postgresql://db:5432/rag`. |
 | `SPRING_PROFILES_ACTIVE` | none | no | Compose sets `demo`, which seeds users and documents. |
 
-Retrieval and model settings (top-k 6, search k 10, min-score 0.6, chunk size 1000 with overlap 150, effort medium, 16,000 max tokens, 120 s timeout) are under `app:` in [`application.yml`](backend/src/main/resources/application.yml). The Playwright tests read `E2E_BASE_URL` (default `http://localhost:8080`) and `E2E_PASSWORD` (default `demo-password`).
+Retrieval and model settings (top-k 6, search k 10, min-score 0.6, chunk size 1000 with overlap 150, effort medium, 16,000 max tokens, 120 s timeout) are under `app:` in [`application.yml`](backend/src/main/resources/application.yml), and so are the rate limits (`app.rate-limit.login`, `ask`, `ask-global`, `search` and `upload`). The Playwright tests read `E2E_BASE_URL` (default `http://localhost:8080`) and `E2E_PASSWORD` (default `demo-password`).
 
 ## Commands
 
@@ -309,15 +326,17 @@ Retrieval and model settings (top-k 6, search k 10, min-score 0.6, chunk size 10
 | `npx playwright install chromium` | `frontend/` | Download the browser once |
 | `npx playwright test` | `frontend/` | End-to-end tests against the running stack |
 
-The backend tests use JUnit 5 and Testcontainers. CI runs `./mvnw -B verify`, the frontend lint and build, and a Docker image build on every push.
+The backend tests use JUnit 5 and Testcontainers. On every push, [`ci.yml`](.github/workflows/ci.yml) runs `./mvnw -B verify`, the frontend lint and build, and a Docker image build, and [`security.yml`](.github/workflows/security.yml) runs CodeQL, Semgrep, gitleaks, OSV-Scanner, `npm audit` and Trivy.
 
 | Area | Test classes |
 |---|---|
-| Auth | `AuthIT`, `JwtAuthIT`, `RateLimitIT` |
-| Retrieval and ingestion | `RbacIT`, `RetrievalQualityIT`, `IngestionIT`, `DocumentFormatsIT` |
+| Auth and platform security | `AuthIT`, `JwtAuthIT`, `RateLimitIT`, `SecurityHeadersIT`, `SecurityAuditIT`, `ErrorResponsesIT`, `DemoAccountsIT` |
+| Retrieval and ingestion | `RbacIT`, `RetrievalQualityIT`, `IngestionIT`, `DocumentFormatsIT`, `DocumentAccessIT` |
 | Ask and guardrails | `GuardrailsTest`, `AskFlowIT`, `AskRbacIT`, `ClaudeLiveIT` (runs only with a key) |
 | Benchmark | `RetrievalLatencyIT` (`-Pbenchmark` only) |
-| Browser | `smoke.spec.ts`, `session.spec.ts` (Playwright) |
+| Browser | Playwright specs in `frontend/tests`; `fixtures.ts` fails any test that triggers a CSP violation |
+
+Last full run: 132 backend tests (131 passed, 1 skipped without an API key) and 10 Playwright tests, all green.
 
 ## Tech stack
 
@@ -340,10 +359,10 @@ enterprise-rag-platform/
 │   └── src/
 │       ├── main/java/com/harshpahurkar/rag/
 │       │   ├── ai/           AskController, AskService, Assistant, AiConfig, the guardrails
-│       │   ├── demo/         DemoDataLoader (demo profile)
+│       │   ├── demo/         DemoDataLoader, DemoAccountsController (demo profile)
 │       │   ├── document/     DocumentController, IngestionService
 │       │   ├── search/       Retriever, SearchController
-│       │   └── security/     SecurityConfig, AuthController, Roles
+│       │   └── security/     SecurityConfig, AuthController, Roles, RateLimits, SecurityAudit
 │       ├── main/resources/
 │       │   ├── application.yml
 │       │   ├── db/migration/ V1__schema.sql
@@ -352,10 +371,12 @@ enterprise-rag-platform/
 │       └── test/             integration tests, eval question sets
 ├── frontend/
 │   ├── src/                  App.tsx, api.ts, views/, components/
-│   └── tests/                Playwright specs
-├── docs/                     architecture.md, benchmark.md, design.md, screenshots/
+│   └── tests/                Playwright specs and the CSP-violation fixture
+├── .github/                  ci.yml, security.yml, dependabot.yml
+├── docs/                     architecture.md, benchmark.md, design.md, threat-model.md, screenshots/
 ├── Dockerfile                SPA build, jar build, JRE runtime
 ├── docker-compose.yml        db and app, both bound to 127.0.0.1
+├── SECURITY.md               how to report a vulnerability
 └── .env.example
 ```
 
@@ -372,9 +393,14 @@ The integration tests start a pgvector container through Testcontainers, so Dock
 The secret is missing or shorter than 32 bytes. The placeholder in `.env.example` is 29 bytes, so an unedited `.env` fails the same way. Generate one with `openssl rand -base64 48`, put it in `.env` as `JWT_SECRET=...`, and start again.
 </details>
 <details>
-<summary>Ask returns 503 "Answering is unavailable"</summary>
+<summary>Ask returns 503 "ANTHROPIC_API_KEY is not set"</summary>
 
 No Anthropic key is configured. Sign-in, documents and search keep working. Add `ANTHROPIC_API_KEY=sk-ant-...` to `.env`, then recreate the app container with `docker compose up -d --force-recreate app`.
+</details>
+<details>
+<summary>A request returns 429 "Too many requests"</summary>
+
+A rate limit was hit, and the `Retry-After` header says how many seconds to wait. The limits live in memory per app instance, under `app.rate-limit` in `application.yml`, so restarting the app resets them.
 </details>
 <details>
 <summary>Port 8080 or 5432 is already in use</summary>
@@ -397,7 +423,9 @@ Compose fails with "port is already allocated" or "ports are not available". Ano
 - [ ] Hybrid BM25 and vector search with reranking, for exact terms and IDs
 - [ ] Chat memory and follow-up questions
 - [ ] User and role management endpoints, refresh tokens, SSO
-- [ ] Query audit log recording who saw which sources
+- [ ] Query audit log recording who saw which sources (security events are already logged)
+- [ ] Least-privilege database role for the app, separate from the migration owner
+- [ ] Rate limits in Redis for more than one app instance
 - [ ] OCR for scanned PDFs
 - [ ] Public deployment
 

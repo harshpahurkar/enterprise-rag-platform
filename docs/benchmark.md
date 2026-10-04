@@ -2,7 +2,7 @@
 
 Reproduce: `cd backend && ./mvnw test -Pbenchmark` (Docker required, about 2 minutes). Source: [`RetrievalLatencyIT.java`](../backend/src/test/java/com/harshpahurkar/rag/search/RetrievalLatencyIT.java).
 
-Run 2026-04-04. 500 queries after 50 warm-up queries, k = 6, user roles [ENGINEERING, EMPLOYEE].
+Run 2026-10-04. 500 queries after 50 warm-up queries, k = 6, user roles [ENGINEERING, EMPLOYEE].
 
 | Stage | p50 (ms) | p95 (ms) | p99 (ms) | max (ms) |
 |---|---:|---:|---:|---:|
@@ -21,7 +21,7 @@ a bare `SELECT 1` are timed alone with `System.nanoTime`, in that order. The SQL
 - random unit-normalized 384-d vectors, chunk text of about 1,000 characters
 - load 7.0 s; HNSW build 32.4 s (`maintenance_work_mem = 1GB`, after the load); VACUUM ANALYZE 0.2 s
 - chunk table (heap + TOAST) 219 MB; `chunk_embedding_hnsw` 195 MB
-- PostgreSQL 18.1 (Debian 18.1-1.pgdg12+2), pgvector 0.8.1, shared_buffers 128MB, hnsw.ef_search 40, hnsw.iterative_scan strict_order
+- PostgreSQL 18.6 (Debian 18.6-1.pgdg12+2), pgvector 0.8.7, shared_buffers 128MB, hnsw.ef_search 40, hnsw.iterative_scan strict_order
 
 ## Machine
 

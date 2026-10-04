@@ -30,7 +30,7 @@ There are no Java projects in `Projects/` to copy conventions from. The frontend
 ## Architecture
 
 ```
-Browser (React SPA) ──Bearer JWT──►  Spring Boot 4.0 jar (also serves the built SPA)
+Browser (React SPA) ──Bearer JWT──►  Spring Boot 4.1 jar (also serves the built SPA)
                                      │
   POST /api/auth/login ──────────────┼─► Spring Security: BCrypt users, HMAC JWT; roles read from DB per request
   GET/POST/DELETE /api/documents ────┼─► IngestionService
@@ -41,10 +41,10 @@ Browser (React SPA) ──Bearer JWT──►  Spring Boot 4.0 jar (also serves 
   POST /api/ask ─────────────────────┴─► Retriever → score gate → Assistant (LangChain4j AI Service)
                                            input guardrails: prompt-injection check, PII masking
                                            templates: system.txt + answer.txt (numbered <sources>)
-                                           Claude Opus 4.5 via langchain4j-anthropic
+                                           Claude Opus 5.5 via langchain4j-anthropic
                                            output guardrail: citation check (re-prompts once)
                                      ▼
-                     PostgreSQL 18 + pgvector 0.8.1
+                     PostgreSQL 18 + pgvector 0.8.7
                      app_user(roles[]) · document(allowed_roles[]) · chunk(embedding vector(384), HNSW)
 ```
 
@@ -55,17 +55,17 @@ Browser (React SPA) ──Bearer JWT──►  Spring Boot 4.0 jar (also serves 
 4. Number the chunks as `[n] Title (part k)` inside `<sources>`, then call `assistant.answer(question, context)`. The guardrails run, then Claude.
 5. Return `{answer, sources[{n, chunkId, documentId, title, chunkIndex, content, score}], retrievalMs, generationMs}`.
 
-## Stack (versions checked on 2025-12-02 against Maven Central, endoflife.date, GitHub, and Docker Hub)
+## Stack (versions checked on 2026-10-04 against Maven Central, endoflife.date, GitHub, and Docker Hub)
 
 | Layer | Choice |
 |---|---|
 | Runtime | Java 21 (Temurin, installed). Maven via `mvnw` (Maven itself isn't installed) |
-| Backend | Spring Boot 4.0.0 (3.5 OSS support ended 2026-06-30): Web MVC, Security, OAuth2 Resource Server (JWT), JDBC (`JdbcClient`), Flyway, Validation |
-| AI | LangChain4j 1.9.1 BOM: `langchain4j`, `langchain4j-anthropic`, `langchain4j-embeddings-bge-small-en-v15-q`, `langchain4j-document-parser-apache-tika` (beta modules are `1.9.1-beta17`). Beans wired by hand with `AiServices.builder`, no LangChain4j starter |
-| LLM | `claude-opus-4-5`. `output_config.effort` passed via `customParameters`, set to `medium` (the model's default, made explicit; try `low` later if answers feel slow). Server-side refusal fallback on (`beta("server-side-fallback-2026-07-01")` + `fallbacks: "default"`). `maxTokens` 16000, 120 s timeout |
-| DB | `pgvector/pgvector:0.8.1-pg18`, HNSW `vector_cosine_ops`, iterative index scans for filtered search |
-| Frontend | `create-vite` 8.2 `react-ts` template (Vite 7.2, React 19.2, TypeScript ~5.9), Tailwind 4.1 via `@tailwindcss/vite` (supports Vite 7), TanStack Query 5, lucide-react |
-| Tests | JUnit 5, Spring Boot Test, Testcontainers 2 (pgvector image), Playwright 1.57 |
+| Backend | Spring Boot 4.1.1 (3.5 OSS support ended 2026-06-30): Web MVC, Security, OAuth2 Resource Server (JWT), JDBC (`JdbcClient`), Flyway, Validation |
+| AI | LangChain4j 1.21.0 BOM: `langchain4j`, `langchain4j-anthropic`, `langchain4j-embeddings-bge-small-en-v15-q`, `langchain4j-document-parser-apache-tika` (beta modules are `1.21.0-beta31`). Beans wired by hand with `AiServices.builder`, no LangChain4j starter |
+| LLM | `claude-opus-5-5`. No `temperature` (400 on Opus 5.5). `output_config.effort` passed via `customParameters`, set to `medium` (the model's default, made explicit; try `low` later if answers feel slow). Server-side refusal fallback on (`beta("server-side-fallback-2026-07-01")` + `fallbacks: "default"`). `maxTokens` 16000, 120 s timeout |
+| DB | `pgvector/pgvector:0.8.7-pg18`, HNSW `vector_cosine_ops`, iterative index scans for filtered search |
+| Frontend | `create-vite` 9.2 `react-ts` template (Vite 8.3, React 19.3, TypeScript ~6.0), Tailwind 4.3 via `@tailwindcss/vite` (supports Vite 8), TanStack Query 5, lucide-react |
+| Tests | JUnit 5, Spring Boot Test, Testcontainers 2 (pgvector image), Playwright 1.63 |
 | Ops | `docker-compose.yml`, multi-stage `Dockerfile` (glibc JRE image, because ONNX Runtime needs it), GitHub Actions CI |
 
 ## Key decisions (one line each)
@@ -166,7 +166,7 @@ The demo data is a fictional consulting firm with obviously fake PII (`@example.
 
 Each phase: write the failing test, implement, then run the verification command and commit. Work happens on branch `build/v1`; merge to `main` after the final check.
 
-0. **Scaffold:** generate the backend from start.spring.io (Boot 4.0.0, Java 21, Maven), add the LangChain4j BOM and modules, write `docker-compose.yml` for the db, and `npm create vite` for the frontend. Verify: `./mvnw -q verify` passes on the empty app; `npm run build` passes.
+0. **Scaffold:** generate the backend from start.spring.io (Boot 4.1.1, Java 21, Maven), add the LangChain4j BOM and modules, write `docker-compose.yml` for the db, and `npm create vite` for the frontend. Verify: `./mvnw -q verify` passes on the empty app; `npm run build` passes.
 1. **Schema, auth, RBAC:** write `V1__schema.sql`, `SecurityConfig`, and `AuthController`. Tests first: `AuthIT` (login OK, bad password 401, no token 401, non-admin upload 403).
 2. **Ingestion:** write `IngestionService` and `DocumentController`, and add a startup check that the embedding model's dimension is 384. Test first: `IngestionIT` (a markdown upload creates chunks of at most 1000 characters with overlap and 384-d embeddings; delete cascades).
 3. **Retrieval and search:** write `Retriever` and `/api/search`. Tests first:
@@ -199,7 +199,7 @@ After approval:
 2. `superpowers:writing-plans` turns each phase into TDD task steps.
 3. `superpowers:subagent-driven-development` implements them. I review each phase's diff and run its verification before moving on.
 
-A background check of exact API details was still running when this plan was written: Spring Boot 4.0 starter names, Spring Security 7 JWT wiring, LangChain4j guardrail signatures, and the Testcontainers 2 package names. Phase 0 generates the backend from start.spring.io and every phase compiles against the real jars, so naming differences get fixed there. None of them change the architecture.
+A background check of exact API details was still running when this plan was written: Spring Boot 4.1 starter names, Spring Security 7 JWT wiring, LangChain4j guardrail signatures, and the Testcontainers 2 package names. Phase 0 generates the backend from start.spring.io and every phase compiles against the real jars, so naming differences get fixed there. None of them change the architecture.
 
 Commits are imperative plain sentences, matching your newest repos. Nothing is pushed to a remote unless you ask.
 

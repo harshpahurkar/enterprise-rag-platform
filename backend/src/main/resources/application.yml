@@ -46,7 +46,7 @@ app:
     min-score: 0.6
   llm:
     api-key: ${ANTHROPIC_API_KEY:}
-    model: ${LLM_MODEL:claude-opus-4-5}
+    model: ${LLM_MODEL:claude-opus-5-5}
     effort: medium
     max-tokens: 16000
     timeout: 120s

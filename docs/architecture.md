@@ -89,7 +89,7 @@ Refusal sentence: `I couldn't find that in the documents you have access to.`
 **[SPEC]**
 | Claude setting | Value |
 |---|---|
-| Model | `claude-opus-4-5`, overridable with `LLM_MODEL` |
+| Model | `claude-opus-5-5`, overridable with `LLM_MODEL` |
 | Client | `AnthropicChatModel` from `langchain4j-anthropic` |
 | Sampling parameters | none sent |
 | Effort | `output_config.effort = medium`, via `customParameters` |

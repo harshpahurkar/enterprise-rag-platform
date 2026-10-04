@@ -6,9 +6,9 @@
 
 [![CI](https://github.com/harshpahurkar/enterprise-rag-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/harshpahurkar/enterprise-rag-platform/actions/workflows/ci.yml)
 ![Java 21](https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&logoColor=white)
-![Spring Boot 4.0](https://img.shields.io/badge/Spring_Boot-4.0-6DB33F?logo=springboot&logoColor=white)
+![Spring Boot 4.1](https://img.shields.io/badge/Spring_Boot-4.1-6DB33F?logo=springboot&logoColor=white)
 ![React 19](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
-![pgvector 0.8.1](https://img.shields.io/badge/pgvector-0.8.1-4169E1?logo=postgresql&logoColor=white)
+![pgvector 0.8.7](https://img.shields.io/badge/pgvector-0.8.7-4169E1?logo=postgresql&logoColor=white)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 <img src="docs/screenshots/search.png" alt="Search view signed in as engineer: ten ranked passages from the Engineering Runbook with similarity scores and the retrieval time" width="900">
@@ -17,7 +17,7 @@
 
 ## What it is
 
-Admins upload documents (PDF, DOCX, PPTX, HTML, Markdown, plain text and other formats Apache Tika reads) and choose which roles may read each one. Users search those documents by meaning, or ask a question that Claude answers from the passages they are allowed to see, citing each claim as `[n]`. The backend is Spring Boot 4.0 with LangChain4j, the frontend is React 19, and the vectors live in PostgreSQL with pgvector.
+Admins upload documents (PDF, DOCX, PPTX, HTML, Markdown, plain text and other formats Apache Tika reads) and choose which roles may read each one. Users search those documents by meaning, or ask a question that Claude answers from the passages they are allowed to see, citing each claim as `[n]`. The backend is Spring Boot 4.1 with LangChain4j, the frontend is React 19, and the vectors live in PostgreSQL with pgvector.
 
 - Retrieval takes 34.0 ms at p50 and 52.0 ms at p95 over 100,000 chunks, query embedding included ([benchmark](docs/benchmark.md)).
 - The role filter is part of the HNSW search SQL, so a chunk the caller can't read is never fetched and can't reach a prompt ([`RbacIT`](backend/src/test/java/com/harshpahurkar/rag/search/RbacIT.java)).
@@ -111,8 +111,8 @@ flowchart LR
         embed["BGE-small-en-v1.5<br/>ONNX, in-process"]
         assistant["Assistant<br/>LangChain4j AI Service<br/>with guardrails"]
     end
-    db[("PostgreSQL 18<br/>pgvector 0.8.1")]
-    claude["Anthropic API<br/>claude-opus-4-5"]
+    db[("PostgreSQL 18<br/>pgvector 0.8.7")]
+    claude["Anthropic API<br/>claude-opus-5-5"]
     browser -->|page load| spa
     browser -->|Bearer JWT| sec
     sec --> auth & docs & search & ask
@@ -139,7 +139,7 @@ flowchart LR
 
 **PostgreSQL with pgvector.** Three tables (`app_user`, `document`, `chunk`) from one Flyway migration, [`V1__schema.sql`](backend/src/main/resources/db/migration/V1__schema.sql). `chunk.embedding` is `vector(384)` with an HNSW `vector_cosine_ops` index; deleting a document cascades to its chunks.
 
-**Claude.** `claude-opus-4-5` through `langchain4j-anthropic`, set by `LLM_MODEL`. The request sends no sampling parameters, sets effort to medium through `output_config`, and turns on the server-side refusal fallback (`fallbacks: "default"`).
+**Claude.** `claude-opus-5-5` through `langchain4j-anthropic`, set by `LLM_MODEL`. The request sends no sampling parameters, sets effort to medium through `output_config`, and turns on the server-side refusal fallback (`fallbacks: "default"`).
 
 More detail, including the failure modes found while building it, is in [docs/architecture.md](docs/architecture.md).
 
@@ -239,7 +239,7 @@ The injection check is a regular-expression heuristic. A paraphrase or another l
 
 ## Benchmarks
 
-Measured by [`RetrievalLatencyIT`](backend/src/test/java/com/harshpahurkar/rag/search/RetrievalLatencyIT.java) on 2026-04-04: 500 queries after 50 warm-up queries, k = 6, as a user with roles ENGINEERING and EMPLOYEE. Full report: [docs/benchmark.md](docs/benchmark.md).
+Measured by [`RetrievalLatencyIT`](backend/src/test/java/com/harshpahurkar/rag/search/RetrievalLatencyIT.java) on 2026-10-04: 500 queries after 50 warm-up queries, k = 6, as a user with roles ENGINEERING and EMPLOYEE. Full report: [docs/benchmark.md](docs/benchmark.md).
 
 | Stage | p50 (ms) | p95 (ms) | p99 (ms) | max (ms) |
 |---|---:|---:|---:|---:|
@@ -285,7 +285,7 @@ Set these in `.env` ([`.env.example`](.env.example) documents each one). Docker 
 |---|---|---|---|
 | `JWT_SECRET` | none | yes | HMAC-SHA256 signing key, at least 32 bytes. Startup fails without it. |
 | `ANTHROPIC_API_KEY` | empty | no | Enables Ask. Without it, Ask returns 503. |
-| `LLM_MODEL` | `claude-opus-4-5` | no | Anthropic model id. |
+| `LLM_MODEL` | `claude-opus-5-5` | no | Anthropic model id. |
 | `DEMO_PASSWORD` | `demo-password` | no | Password for the seeded users (demo profile only). |
 | `POSTGRES_USER` | `rag` | no | Database user, used by both containers. |
 | `POSTGRES_PASSWORD` | `rag` | no | Database password. `.env.example` sets `change-me`. |
@@ -323,12 +323,12 @@ The backend tests use JUnit 5 and Testcontainers. CI runs `./mvnw -B verify`, th
 
 | Layer | Choice |
 |---|---|
-| Backend | Java 21, Spring Boot 4.0.0 (Web MVC, Spring Security 7, OAuth2 resource server, JDBC, Flyway, Validation), virtual threads |
-| AI | LangChain4j 1.9.1: AI Services, guardrails, `langchain4j-anthropic`, BGE-small-en-v1.5 quantized ONNX embeddings, Apache Tika parser |
-| LLM | Claude `claude-opus-4-5` |
-| Database | PostgreSQL 18, pgvector 0.8.1, HNSW index with cosine distance |
-| Frontend | React 19, Vite 7, TypeScript 5.9, Tailwind CSS 4.1, TanStack Query 5, lucide-react |
-| Tests | JUnit 5, Testcontainers, Playwright 1.57 |
+| Backend | Java 21, Spring Boot 4.1.1 (Web MVC, Spring Security 7, OAuth2 resource server, JDBC, Flyway, Validation), virtual threads |
+| AI | LangChain4j 1.21.0: AI Services, guardrails, `langchain4j-anthropic`, BGE-small-en-v1.5 quantized ONNX embeddings, Apache Tika parser |
+| LLM | Claude `claude-opus-5-5` |
+| Database | PostgreSQL 18, pgvector 0.8.7, HNSW index with cosine distance |
+| Frontend | React 19, Vite 8, TypeScript 6, Tailwind CSS 4.3, TanStack Query 5, lucide-react |
+| Tests | JUnit 5, Testcontainers, Playwright 1.63 |
 | Ops | Multi-stage Dockerfile, Docker Compose, GitHub Actions |
 
 ## Project structure

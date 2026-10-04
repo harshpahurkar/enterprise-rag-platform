@@ -275,7 +275,7 @@ class AskFlowIT {
 
 	/** The chat model AiConfig builds when the key is blank. */
 	private static ChatModel noKeyModel() {
-		var llm = new AppProperties.Llm(" ", "claude-opus-4-5", "medium", 16000, Duration.ofSeconds(120));
+		var llm = new AppProperties.Llm(" ", "claude-opus-5-5", "medium", 16000, Duration.ofSeconds(120));
 		return new AiConfig().chatModel(new AppProperties(null, null, llm, null));
 	}
 

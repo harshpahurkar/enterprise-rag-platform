@@ -97,6 +97,10 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (!response.ok) {
+    if (response.status === 429) {
+      const seconds = Number(response.headers.get('Retry-After'))
+      throw new ApiError(429, Number.isFinite(seconds) && seconds > 0 ? `Too many requests. Try again in ${seconds} seconds.` : 'Too many requests. Try again shortly.')
+    }
     const body = await response.text()
     // An empty 502-504 comes from a proxy whose backend is down.
     if (!body && response.status >= 502 && response.status <= 504) throw new ApiError(response.status, UNREACHABLE)

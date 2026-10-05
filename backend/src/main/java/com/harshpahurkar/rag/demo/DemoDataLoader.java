@@ -73,7 +73,8 @@ public class DemoDataLoader implements ApplicationRunner {
 		USERS.forEach(user -> jdbc.sql("""
 				INSERT INTO app_user (username, password_hash, roles) VALUES (?, ?, ?::text[])
 				ON CONFLICT (username) DO NOTHING
-				""").params(user.username(), encoder.encode(props.demo().password()), user.roles().toArray(String[]::new))
+				""")
+			.params(user.username(), encoder.encode(props.demo().password()), user.roles().toArray(String[]::new))
 			.update());
 		log.info("Demo users present: {} (existing ones keep their password and roles)",
 				USERS.stream().map(DemoUser::username).toList());

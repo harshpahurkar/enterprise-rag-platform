@@ -7,12 +7,15 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
 @TestConfiguration(proxyBeanMethods = false)
-class TestcontainersConfiguration {
+public class TestcontainersConfiguration {
+
+	public static final DockerImageName PGVECTOR = DockerImageName.parse("pgvector/pgvector:0.8.7-pg18")
+		.asCompatibleSubstituteFor("postgres");
 
 	@Bean
 	@ServiceConnection
 	PostgreSQLContainer postgresContainer() {
-		return new PostgreSQLContainer(DockerImageName.parse("postgres:latest"));
+		return new PostgreSQLContainer(PGVECTOR);
 	}
 
 }

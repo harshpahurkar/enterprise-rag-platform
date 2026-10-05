@@ -1,0 +1,40 @@
+spring:
+  application:
+    name: rag-platform
+  # Lets `./mvnw spring-boot:run` pick up the repo's .env (same file docker compose reads).
+  config:
+    import: optional:file:.env[.properties],optional:file:../.env[.properties]
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/rag}
+    username: ${POSTGRES_USER:rag}
+    password: ${POSTGRES_PASSWORD:rag}
+  servlet:
+    multipart:
+      max-file-size: 25MB
+      max-request-size: 26MB
+  mvc:
+    problemdetails:
+      enabled: true
+  threads:
+    virtual:
+      enabled: true
+
+app:
+  jwt:
+    # HMAC-SHA256 key, at least 32 bytes. Required: startup fails without it.
+    secret: ${JWT_SECRET:}
+    ttl: 1h
+  rag:
+    chunk-size: 1000
+    chunk-overlap: 150
+    top-k: 6
+    search-k: 10
+    min-score: 0.55
+  llm:
+    api-key: ${ANTHROPIC_API_KEY:}
+    model: ${LLM_MODEL:claude-opus-5-5}
+    effort: medium
+    max-tokens: 16000
+    timeout: 120s
+  demo:
+    password: ${DEMO_PASSWORD:demo-password}

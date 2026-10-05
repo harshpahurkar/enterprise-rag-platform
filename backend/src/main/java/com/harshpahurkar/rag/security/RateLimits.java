@@ -26,7 +26,7 @@ import jakarta.servlet.http.HttpServletResponse;
  * address, never X-Forwarded-For, which any client can set. Only POSTs count: every limited endpoint is a POST, and
  * GET /api/documents must stay free.
  */
-// ponytail: single-instance memory; move to Redis or Bucket4j for multiple instances.
+// Known limit: single-instance memory; move to Redis or Bucket4j for multiple instances.
 @Configuration
 @EnableConfigurationProperties(RateLimits.Props.class)
 class RateLimits implements WebMvcConfigurer {

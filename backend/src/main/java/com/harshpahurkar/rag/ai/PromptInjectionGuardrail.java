@@ -11,7 +11,7 @@ import dev.langchain4j.guardrail.InputGuardrailResult;
  * template variable, never the retrieved context: the system prompt already treats sources as untrusted data,
  * and a document that happens to quote these phrases must not block legitimate questions.
  */
-// ponytail: regex heuristic, beaten by paraphrase or another language; swap in a prompt-injection classifier
+// Known limit: regex heuristic, beaten by paraphrase or another language; swap in a prompt-injection classifier
 // (a small fine-tuned model or a moderation endpoint) when false negatives start to matter.
 public class PromptInjectionGuardrail implements InputGuardrail {
 

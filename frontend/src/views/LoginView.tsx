@@ -1,16 +1,10 @@
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { Info } from 'lucide-react'
 import { useRef, type FormEvent } from 'react'
-import { api, ApiError, type Session } from '../api'
+import { ROLES, api, ApiError, type Session } from '../api'
 import { Notice, Spinner, ThemeToggle, Wordmark } from '../components/ui'
 
-const DEMO_ACCOUNTS = [
-  { username: 'admin', reads: 'Every role' },
-  { username: 'hr.manager', reads: 'HR, Employee' },
-  { username: 'finance.analyst', reads: 'Finance, Employee' },
-  { username: 'legal.counsel', reads: 'Legal, Employee' },
-  { username: 'engineer', reads: 'Engineering, Employee' },
-]
+const rolesLabel = (roles: string[]) => (roles.length === ROLES.length ? 'Every role' : roles.join(', '))
 
 interface Props {
   notice: string | null
@@ -20,6 +14,8 @@ interface Props {
 export function LoginView({ notice, onSignedIn }: Props) {
   const usernameRef = useRef<HTMLInputElement>(null)
   const passwordRef = useRef<HTMLInputElement>(null)
+  // Only a backend running the demo profile answers 200; anywhere else this is a 404 and the hint stays hidden.
+  const demoAccounts = useQuery({ queryKey: ['demo-accounts'], queryFn: api.demoAccounts, retry: false, staleTime: Infinity })
   const login = useMutation({
     mutationFn: ({ username, password }: { username: string; password: string }) => api.login(username, password),
     onSuccess: onSignedIn,
@@ -105,26 +101,28 @@ export function LoginView({ notice, onSignedIn }: Props) {
           </button>
         </form>
 
-        <section aria-labelledby="demo-title" className="mt-6 rounded-panel border border-dashed border-rule-strong p-4">
-          <h2 id="demo-title" className="text-sm font-semibold">
-            Demo accounts
-          </h2>
-          <p className="mt-0.5 text-xs text-ink-2">Each uses the password <code className="font-mono">demo-password</code> unless <code className="font-mono">DEMO_PASSWORD</code> is set in <code className="font-mono">.env</code>. Pick one to fill in the username.</p>
-          <ul className="mt-3 divide-y divide-rule">
-            {DEMO_ACCOUNTS.map((account) => (
-              <li key={account.username} className="flex items-center justify-between gap-3 py-1.5">
-                <button
-                  type="button"
-                  onClick={() => fillDemo(account.username)}
-                  className="cursor-pointer rounded-tag font-mono text-sm text-accent underline decoration-accent/40 underline-offset-3 hover:decoration-accent active:bg-accent-soft"
-                >
-                  {account.username}
-                </button>
-                <span className="text-xs text-ink-3">{account.reads}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
+        {demoAccounts.data && (
+          <section aria-labelledby="demo-title" className="mt-6 rounded-panel border border-dashed border-rule-strong p-4">
+            <h2 id="demo-title" className="text-sm font-semibold">
+              Demo accounts
+            </h2>
+            <p className="mt-0.5 text-xs text-ink-2">Each uses the password set as <code className="font-mono">DEMO_PASSWORD</code> in <code className="font-mono">.env</code>; the README lists the default. Pick one to fill in the username.</p>
+            <ul className="mt-3 divide-y divide-rule">
+              {demoAccounts.data.map((account) => (
+                <li key={account.username} className="flex items-center justify-between gap-3 py-1.5">
+                  <button
+                    type="button"
+                    onClick={() => fillDemo(account.username)}
+                    className="cursor-pointer rounded-tag font-mono text-sm text-accent underline decoration-accent/40 underline-offset-3 hover:decoration-accent active:bg-accent-soft"
+                  >
+                    {account.username}
+                  </button>
+                  <span className="text-xs text-ink-3">{rolesLabel(account.roles)}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
       </main>
     </div>
   )

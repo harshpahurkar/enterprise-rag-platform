@@ -86,6 +86,12 @@ class AuthIT {
 			.andExpect(status().isNotFound());
 	}
 
+	/** The login page's demo hint exists only under the demo profile; this context runs without it. */
+	@Test
+	void demoAccountsIsNotFoundWithoutTheDemoProfile() throws Exception {
+		mvc.perform(get("/api/auth/demo-accounts")).andExpect(status().isNotFound());
+	}
+
 	@Test
 	void wrongPasswordIs401() throws Exception {
 		mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)

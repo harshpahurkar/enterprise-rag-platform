@@ -74,6 +74,9 @@ public class SecurityConfig {
 			.sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 			.authorizeHttpRequests(auth -> auth.requestMatchers(HttpMethod.POST, "/api/auth/login")
 				.permitAll()
+				// Served only under the demo profile (DemoAccountsController); a 404 otherwise.
+				.requestMatchers(HttpMethod.GET, "/api/auth/demo-accounts")
+				.permitAll()
 				.requestMatchers(HttpMethod.POST, "/api/documents")
 				.hasRole("ADMIN")
 				.requestMatchers(HttpMethod.DELETE, "/api/documents/**")

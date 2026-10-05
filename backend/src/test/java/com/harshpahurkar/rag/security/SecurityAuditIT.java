@@ -90,11 +90,11 @@ class SecurityAuditIT {
 	@Test
 	void loginSuccessAndFailureAreLoggedWithoutPasswordOrToken(CapturedOutput output) throws Exception {
 		String token = token("audit.hr");
-		login("audit.hr", "wrong-Guess-5519").andExpect(status().isUnauthorized());
+		login("audit.hr", "not-the-right-password").andExpect(status().isUnauthorized());
 
 		assertThat(audit(output)).contains("event=login_success user=audit.hr ip=127.0.0.1",
 				"event=login_failure user=audit.hr ip=127.0.0.1");
-		assertThat(output.getAll()).doesNotContain(PASSWORD, "wrong-Guess-5519", token);
+		assertThat(output.getAll()).doesNotContain(PASSWORD, "not-the-right-password", token);
 	}
 
 	@Test

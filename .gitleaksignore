@@ -1,0 +1,3 @@
+# Verified false positives only. Each line is a gitleaks fingerprint (commit:file:rule:line).
+# SecurityAuditIT used a deliberately wrong test password to prove passwords are never logged.
+b23da5a8516cd79a349c1cb67893abcde7c687e6:backend/src/test/java/com/harshpahurkar/rag/security/SecurityAuditIT.java:generic-api-key:97

@@ -9,7 +9,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # ── Stage 2: build the jar (SPA bundled into classpath:/static) ──
-FROM eclipse-temurin:21-jdk AS backend
+FROM eclipse-temurin:24-jdk AS backend
 WORKDIR /build
 COPY backend/mvnw backend/pom.xml ./
 COPY backend/.mvn .mvn
@@ -42,7 +42,7 @@ RUN case "${TARGETARCH:-amd64}" in \
  && cd / && rm -rf /x
 
 # ── Stage 3: runtime (glibc image, ONNX Runtime does not work on Alpine) ──
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:24-jre
 RUN useradd --system --uid 10001 --no-create-home app
 WORKDIR /app
 COPY --from=backend /build/app.jar app.jar

@@ -1,5 +1,7 @@
 package com.harshpahurkar.rag.ai;
 
+import java.security.Principal;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -13,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.harshpahurkar.rag.ai.AskService.AskResponse;
 import com.harshpahurkar.rag.security.Roles;
+import com.harshpahurkar.rag.security.SecurityAudit;
 
 import dev.langchain4j.exception.LangChain4jException;
 import dev.langchain4j.guardrail.InputGuardrailException;
@@ -43,17 +46,20 @@ class AskController {
 
 	/**
 	 * Fixed text: the exception's own message names guardrail classes. Only the injection check can fail input,
-	 * in AskService or in the AI Service. A missing API key is a ResponseStatusException (503) from AiConfig.
+	 * in AskService or in the AI Service. A missing API key is a ResponseStatusException (503) from AiConfig. The
+	 * audit line names the guardrail, never the question.
 	 */
 	@ExceptionHandler(InputGuardrailException.class)
-	ProblemDetail blocked(InputGuardrailException e) {
+	ProblemDetail blocked(InputGuardrailException e, Principal user) {
+		SecurityAudit.log("ask_blocked", "user", user.getName(), "guardrail", "prompt-injection");
 		return ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_CONTENT,
 				"The question was blocked because it looks like an attempt to change the assistant's instructions. "
 						+ "Please rephrase it.");
 	}
 
 	@ExceptionHandler(OutputGuardrailException.class)
-	ProblemDetail ungrounded(OutputGuardrailException e) {
+	ProblemDetail ungrounded(OutputGuardrailException e, Principal user) {
+		SecurityAudit.log("ask_blocked", "user", user.getName(), "guardrail", "citation");
 		return ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_CONTENT,
 				"The answer could not be grounded in your documents");
 	}

@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.harshpahurkar.rag.security.Roles;
+import com.harshpahurkar.rag.security.SecurityAudit;
 
 import jakarta.validation.constraints.Size;
 
@@ -51,10 +52,14 @@ class DocumentController {
 		if (!StringUtils.hasText(title)) {
 			title = StringUtils.stripFilenameExtension(filename);
 		}
+		DocumentView doc;
 		try (InputStream in = file.getInputStream()) {
-			return ingestion.ingest(title.strip(), filename, file.getContentType(), in, allowedRoles,
+			doc = ingestion.ingest(title.strip(), filename, file.getContentType(), in, allowedRoles,
 					authentication.getName());
 		}
+		SecurityAudit.log("document_upload", "user", authentication.getName(), "id", doc.id(), "roles",
+				String.join(",", doc.allowedRoles()), "bytes", file.getSize());
+		return doc;
 	}
 
 	@DeleteMapping("/{id}")
@@ -62,6 +67,7 @@ class DocumentController {
 	@PreAuthorize("hasRole('ADMIN')")
 	void delete(@PathVariable long id, Authentication authentication) {
 		ingestion.delete(id, Roles.of(authentication));
+		SecurityAudit.log("document_delete", "user", authentication.getName(), "id", id);
 	}
 
 }

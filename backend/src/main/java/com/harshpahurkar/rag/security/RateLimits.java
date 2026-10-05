@@ -45,18 +45,21 @@ class RateLimits implements WebMvcConfigurer {
 
 	@Override
 	public void addInterceptors(InterceptorRegistry registry) {
-		registry.addInterceptor(limit(props.login(), HttpServletRequest::getRemoteAddr))
+		registry.addInterceptor(limit("login", "ip", props.login(), HttpServletRequest::getRemoteAddr))
 			.addPathPatterns("/api/auth/login");
 		// These run after the security filters, so the caller is already authenticated.
 		Function<HttpServletRequest, String> user = req -> req.getUserPrincipal().getName();
-		registry.addInterceptor(limit(props.ask(), user)).addPathPatterns("/api/ask");
+		registry.addInterceptor(limit("ask", "user", props.ask(), user)).addPathPatterns("/api/ask");
 		// After the per-user check, so requests one user already had refused don't spend everyone's budget.
-		registry.addInterceptor(limit(props.askGlobal(), req -> "all users")).addPathPatterns("/api/ask");
-		registry.addInterceptor(limit(props.search(), user)).addPathPatterns("/api/search");
-		registry.addInterceptor(limit(props.upload(), user)).addPathPatterns("/api/documents");
+		registry.addInterceptor(limit("ask-global", "global", props.askGlobal(), req -> "all users"))
+			.addPathPatterns("/api/ask");
+		registry.addInterceptor(limit("search", "user", props.search(), user)).addPathPatterns("/api/search");
+		registry.addInterceptor(limit("upload", "user", props.upload(), user)).addPathPatterns("/api/documents");
 	}
 
-	static HandlerInterceptor limit(Props.Limit limit, Function<HttpServletRequest, String> key) {
+	/** {@code name} and {@code keyType} go to the audit log on a hit; the key itself (an IP or username) does not. */
+	static HandlerInterceptor limit(String name, String keyType, Props.Limit limit,
+			Function<HttpServletRequest, String> key) {
 		var windows = new FixedWindows(limit.requests(), limit.window());
 		return new HandlerInterceptor() {
 			@Override
@@ -66,6 +69,7 @@ class RateLimits implements WebMvcConfigurer {
 				}
 				long retryAfter = windows.hit(key.apply(req));
 				if (retryAfter > 0) {
+					SecurityAudit.log("rate_limited", "limit", name, "key", keyType, "path", req.getRequestURI());
 					var problem = ProblemDetail.forStatusAndDetail(HttpStatus.TOO_MANY_REQUESTS,
 							"Too many requests. Try again in " + retryAfter + " seconds.");
 					var e = new ErrorResponseException(HttpStatus.TOO_MANY_REQUESTS, problem, null);

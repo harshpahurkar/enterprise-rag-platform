@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Trash2, Upload } from 'lucide-react'
-import { Fragment, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
+import { Fragment, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { ROLES, api, type DocumentInfo, type Session } from '../api'
 import { Notice, RoleTag, Spinner } from '../components/ui'
 
@@ -201,6 +201,7 @@ function UploadForm({ onUploaded }: { onUploaded: (doc: DocumentInfo) => void })
             id="upload-file"
             name="file"
             type="file"
+            accept=".pdf,.docx,.doc,.md,.txt,.html,.pptx,.xlsx,.rtf,.odt"
             aria-invalid={errors.file ? true : undefined}
             aria-describedby={errors.file ? 'upload-file-error' : undefined}
             onChange={() => errors.file && setErrors({ ...errors, file: undefined })}
@@ -275,7 +276,6 @@ interface DeleteConfirmProps {
 
 function DeleteConfirm({ doc, onCancel, onDeleted }: DeleteConfirmProps) {
   const queryClient = useQueryClient()
-  const cancelRef = useRef<HTMLButtonElement>(null)
   // Captured during the first render, while focus is still on the Delete button that opened this.
   const [returnTo] = useState(() => document.activeElement as HTMLElement | null)
   const remove = useMutation({
@@ -285,8 +285,6 @@ function DeleteConfirm({ doc, onCancel, onDeleted }: DeleteConfirmProps) {
       onDeleted(doc)
     },
   })
-
-  useEffect(() => cancelRef.current?.focus(), [])
 
   function cancel() {
     onCancel()
@@ -309,7 +307,7 @@ function DeleteConfirm({ doc, onCancel, onDeleted }: DeleteConfirmProps) {
         Delete “{doc.title}” and its {doc.chunkCount} chunks? This cannot be undone.
       </p>
       <div className="ml-auto flex gap-2">
-        <button ref={cancelRef} type="button" className="btn btn-quiet btn-sm" onClick={cancel} disabled={remove.isPending}>
+        <button autoFocus type="button" className="btn btn-quiet btn-sm" onClick={cancel} disabled={remove.isPending}>
           Cancel
         </button>
         <button type="button" className="btn btn-danger btn-sm" onClick={() => remove.mutate()} disabled={remove.isPending}>

@@ -8,6 +8,7 @@ const DEMO_ACCOUNTS = [
   { username: 'admin', reads: 'Every role' },
   { username: 'hr.manager', reads: 'HR, Employee' },
   { username: 'finance.analyst', reads: 'Finance, Employee' },
+  { username: 'legal.counsel', reads: 'Legal, Employee' },
   { username: 'engineer', reads: 'Engineering, Employee' },
 ]
 
@@ -108,7 +109,7 @@ export function LoginView({ notice, onSignedIn }: Props) {
           <h2 id="demo-title" className="text-sm font-semibold">
             Demo accounts
           </h2>
-          <p className="mt-0.5 text-xs text-ink-2">Each shares the demo password from the README. Pick one to fill in the username.</p>
+          <p className="mt-0.5 text-xs text-ink-2">Each uses the password <code className="font-mono">demo-password</code> unless <code className="font-mono">DEMO_PASSWORD</code> is set in <code className="font-mono">.env</code>. Pick one to fill in the username.</p>
           <ul className="mt-3 divide-y divide-rule">
             {DEMO_ACCOUNTS.map((account) => (
               <li key={account.username} className="flex items-center justify-between gap-3 py-1.5">

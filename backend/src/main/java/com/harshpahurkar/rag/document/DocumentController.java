@@ -5,6 +5,7 @@ import java.io.InputStream;
 import java.util.List;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -21,7 +22,7 @@ import com.harshpahurkar.rag.security.Roles;
 
 import jakarta.validation.constraints.Size;
 
-/** Upload and delete are ADMIN-only (see SecurityConfig); listing is filtered to the caller's roles. */
+/** Upload and delete are ADMIN-only, here and in SecurityConfig's URL rules; listing is filtered to the caller's roles. */
 @RestController
 @RequestMapping("/api/documents")
 class DocumentController {
@@ -39,6 +40,7 @@ class DocumentController {
 
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
+	@PreAuthorize("hasRole('ADMIN')")
 	DocumentView upload(@RequestParam MultipartFile file, @RequestParam(required = false) @Size(max = 200) String title,
 			@RequestParam(required = false) List<String> allowedRoles, Authentication authentication)
 			throws IOException {
@@ -57,6 +59,7 @@ class DocumentController {
 
 	@DeleteMapping("/{id}")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
+	@PreAuthorize("hasRole('ADMIN')")
 	void delete(@PathVariable long id) {
 		ingestion.delete(id);
 	}

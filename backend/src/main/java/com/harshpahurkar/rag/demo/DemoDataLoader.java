@@ -14,14 +14,19 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 import com.harshpahurkar.rag.AppProperties;
 import com.harshpahurkar.rag.document.DocumentView;
 import com.harshpahurkar.rag.document.IngestionService;
+import com.harshpahurkar.rag.security.Roles;
 
 import tools.jackson.databind.json.JsonMapper;
 
-/** Demo profile only: upserts the demo users, and ingests demo-docs/ when the document table is empty. */
+/**
+ * Demo profile only: creates any missing demo user (existing ones keep their password and roles), and ingests
+ * demo-docs/ when the document table is empty.
+ */
 @Component
 @Profile("demo")
 public class DemoDataLoader implements ApplicationRunner {
@@ -29,7 +34,7 @@ public class DemoDataLoader implements ApplicationRunner {
 	private static final Logger log = LoggerFactory.getLogger(DemoDataLoader.class);
 
 	private static final Map<String, List<String>> USERS = Map.of(
-			"admin", List.of("ADMIN", "HR", "FINANCE", "LEGAL", "ENGINEERING", "EMPLOYEE"),
+			"admin", Roles.ALL,
 			"hr.manager", List.of("HR", "EMPLOYEE"),
 			"finance.analyst", List.of("FINANCE", "EMPLOYEE"),
 			"legal.counsel", List.of("LEGAL", "EMPLOYEE"),
@@ -50,6 +55,9 @@ public class DemoDataLoader implements ApplicationRunner {
 
 	public DemoDataLoader(JdbcClient jdbc, IngestionService ingestion, PasswordEncoder encoder, AppProperties props,
 			JsonMapper json) {
+		if (!StringUtils.hasText(props.demo().password())) {
+			throw new IllegalStateException("The demo profile needs app.demo.password (DEMO_PASSWORD) to be set");
+		}
 		this.jdbc = jdbc;
 		this.ingestion = ingestion;
 		this.encoder = encoder;
@@ -61,9 +69,9 @@ public class DemoDataLoader implements ApplicationRunner {
 	public void run(ApplicationArguments args) throws IOException {
 		USERS.forEach((username, roles) -> jdbc.sql("""
 				INSERT INTO app_user (username, password_hash, roles) VALUES (?, ?, ?::text[])
-				ON CONFLICT (username) DO UPDATE SET password_hash = EXCLUDED.password_hash, roles = EXCLUDED.roles
+				ON CONFLICT (username) DO NOTHING
 				""").params(username, encoder.encode(props.demo().password()), roles.toArray(String[]::new)).update());
-		log.info("Demo users upserted: {}", USERS.keySet());
+		log.info("Demo users present: {} (existing ones keep their password and roles)", USERS.keySet());
 
 		if (jdbc.sql("SELECT count(*) FROM document").query(Long.class).single() > 0) {
 			log.info("Documents already present, skipping demo documents");

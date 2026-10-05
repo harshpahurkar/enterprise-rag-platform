@@ -1,5 +1,6 @@
 # Retrieval latency
-nReproduce: `cd backend && ./mvnw test -Pbenchmark` (Docker required, about 2 minutes). Source: [`RetrievalLatencyIT.java`](../backend/src/test/java/com/harshpahurkar/rag/search/RetrievalLatencyIT.java).
+
+Reproduce: `cd backend && ./mvnw test -Pbenchmark` (Docker required, about 2 minutes). Source: [`RetrievalLatencyIT.java`](../backend/src/test/java/com/harshpahurkar/rag/search/RetrievalLatencyIT.java).
 
 Run 2026-10-04. 500 queries after 50 warm-up queries, k = 6, user roles [ENGINEERING, EMPLOYEE].
 

@@ -1,0 +1,11 @@
+.git
+.github
+.env
+.idea
+.vscode
+**/node_modules
+**/target
+**/dist
+**/test-results
+**/playwright-report
+docs

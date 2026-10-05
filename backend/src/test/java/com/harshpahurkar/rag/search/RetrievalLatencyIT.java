@@ -233,8 +233,8 @@ class RetrievalLatencyIT {
 				%s
 
 				Total is `retrievalMs` from `Retriever.retrieve`, in whole ms. After each retrieve, the embed, the SQL and
-				a bare `SELECT 1` are timed alone with `System.nanoTime`, in that order. The SQL makes three round trips
-				(SET LOCAL, search, COMMIT); the EXPLAIN below shows how much of it Postgres spends executing.
+				a bare `SELECT 1` are timed alone with `System.nanoTime`, in that order. The SQL is one autocommit round trip
+				(session settings come from Hikari's connection-init-sql); the EXPLAIN below shows how much of it Postgres spends executing.
 
 				## Dataset
 
@@ -257,7 +257,7 @@ class RetrievalLatencyIT {
 				```
 				""", LocalDate.now(), n, WARMUP, K, ROLES, row("Total (retrievalMs)", total),
 				row("Embed query (BGE-small-en-v1.5 q, in-process)", embed),
-				row("SQL (role-filtered HNSW search, one transaction)", sql),
+				row("SQL (role-filtered HNSW search, one round trip)", sql),
 				row("DB round trip (`SELECT 1`)", roundTrip), db.get("chunks"), db.get("documents"), visible * 100,
 				ROLES, loadSeconds, indexSeconds, vacuumSeconds, db.get("chunk_table"), db.get("hnsw_index"),
 				db.get("postgres"), db.get("pgvector"), db.get("shared_buffers"), db.get("ef_search"),
@@ -274,22 +274,16 @@ class RetrievalLatencyIT {
 		assertThat(percentile(total, 95)).as("p95 retrievalMs").isLessThan(200);
 	}
 
-	/** SEARCH_SQL exactly as Retriever runs it: one transaction with the iterative scan on. */
+	/** SEARCH_SQL exactly as Retriever runs it: one autocommit query on a connection set up by application.yml. */
 	private void search(String vector) {
-		tx.executeWithoutResult(s -> {
-			jdbc.sql("SET LOCAL hnsw.iterative_scan = strict_order").update();
-			bind(jdbc.sql(SEARCH_SQL), vector).query().listOfRows();
-		});
+		bind(jdbc.sql(SEARCH_SQL), vector).query().listOfRows();
 	}
 
 	/** EXPLAIN inlines the bound query vector; shorten it so the plan stays readable. */
 	private String explain(String vector) {
-		return tx.execute(s -> {
-			jdbc.sql("SET LOCAL hnsw.iterative_scan = strict_order").update();
-			return String.join("\n",
-					bind(jdbc.sql("EXPLAIN (ANALYZE, BUFFERS) " + SEARCH_SQL), vector).query(String.class).list())
-				.replaceAll("'\\[[^\\]]*\\]'::vector", "'[384 floats]'::vector");
-		});
+		return String.join("\n",
+				bind(jdbc.sql("EXPLAIN (ANALYZE, BUFFERS) " + SEARCH_SQL), vector).query(String.class).list())
+			.replaceAll("'\\[[^\\]]*\\]'::vector", "'[384 floats]'::vector");
 	}
 
 	private static JdbcClient.StatementSpec bind(JdbcClient.StatementSpec spec, String vector) {

@@ -8,6 +8,12 @@ spring:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/rag}
     username: ${POSTGRES_USER:rag}
     password: ${POSTGRES_PASSWORD:rag}
+    hikari:
+      # Set once per pooled connection so a search is one autocommit round trip:
+      # - iterative_scan: HNSW filters after the index scan; this keeps reading until k rows pass the role filter.
+      # - force_custom_plan: after 5 runs pgjdbc server-prepares the search, and a generic plan can't see the
+      #   role array, guesses 1% selectivity and skips HNSW (measured 350-425 ms vs ~5 ms). Never use it.
+      connection-init-sql: SET hnsw.iterative_scan = strict_order; SET plan_cache_mode = force_custom_plan
   servlet:
     multipart:
       max-file-size: 25MB

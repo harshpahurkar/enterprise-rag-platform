@@ -4,7 +4,6 @@ import java.util.List;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.support.TransactionTemplate;
 
 import dev.langchain4j.model.embedding.EmbeddingModel;
 
@@ -41,12 +40,9 @@ public class Retriever {
 
 	private final JdbcClient jdbc;
 
-	private final TransactionTemplate tx;
-
-	public Retriever(EmbeddingModel embeddings, JdbcClient jdbc, TransactionTemplate tx) {
+	public Retriever(EmbeddingModel embeddings, JdbcClient jdbc) {
 		this.embeddings = embeddings;
 		this.jdbc = jdbc;
-		this.tx = tx;
 	}
 
 	public Retrieval retrieve(String query, List<String> userRoles, int k) {
@@ -55,17 +51,14 @@ public class Retriever {
 			return new Retrieval(List.of(), 0);
 		}
 		String vector = PgVector.literal(embeddings.embed(query).content().vector());
-		List<RetrievedChunk> chunks = tx.execute(status -> {
-			// HNSW filters after the index scan; iterative scans keep reading until k rows pass the role filter.
-			jdbc.sql("SET LOCAL hnsw.iterative_scan = strict_order").update();
-			return jdbc.sql(SEARCH_SQL)
-				.param("q", vector)
-				.param("roles", userRoles.toArray(String[]::new))
-				.param("k", k)
-				.query((rs, n) -> new RetrievedChunk(rs.getLong(1), rs.getLong(2), rs.getString(3), rs.getInt(4),
-						rs.getString(5), rs.getDouble(6)))
-				.list();
-		});
+		// One round trip. hnsw.iterative_scan and plan_cache_mode are set per connection (application.yml).
+		List<RetrievedChunk> chunks = jdbc.sql(SEARCH_SQL)
+			.param("q", vector)
+			.param("roles", userRoles.toArray(String[]::new))
+			.param("k", k)
+			.query((rs, n) -> new RetrievedChunk(rs.getLong(1), rs.getLong(2), rs.getString(3), rs.getInt(4),
+					rs.getString(5), rs.getDouble(6)))
+			.list();
 		return new Retrieval(chunks, (System.nanoTime() - start) / 1_000_000);
 	}
 

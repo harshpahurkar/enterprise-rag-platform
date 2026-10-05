@@ -20,9 +20,11 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 /**
- * Fixed-window limits under {@code app.rate-limit.*}: login per client IP (password guessing), ask per user (LLM
- * cost). Over the limit the caller gets a 429 ProblemDetail with {@code Retry-After} in seconds. The client IP is
- * the socket address, never X-Forwarded-For, which any client can set.
+ * Fixed-window limits under {@code app.rate-limit.*}: login per client IP (password guessing); ask, search and
+ * upload per user (LLM cost, embedding CPU, parsing); and one ask budget shared by all users, a ceiling on LLM spend.
+ * Over a limit the caller gets a 429 ProblemDetail with {@code Retry-After} in seconds. The client IP is the socket
+ * address, never X-Forwarded-For, which any client can set. Only POSTs count: every limited endpoint is a POST, and
+ * GET /api/documents must stay free.
  */
 // ponytail: single-instance memory; move to Redis or Bucket4j for multiple instances.
 @Configuration
@@ -30,7 +32,7 @@ import jakarta.servlet.http.HttpServletResponse;
 class RateLimits implements WebMvcConfigurer {
 
 	@ConfigurationProperties("app.rate-limit")
-	record Props(Limit login, Limit ask) {
+	record Props(Limit login, Limit ask, Limit askGlobal, Limit search, Limit upload) {
 		record Limit(int requests, Duration window) {
 		}
 	}
@@ -45,8 +47,13 @@ class RateLimits implements WebMvcConfigurer {
 	public void addInterceptors(InterceptorRegistry registry) {
 		registry.addInterceptor(limit(props.login(), HttpServletRequest::getRemoteAddr))
 			.addPathPatterns("/api/auth/login");
-		// Runs after the security filters, so the caller is already authenticated.
-		registry.addInterceptor(limit(props.ask(), req -> req.getUserPrincipal().getName())).addPathPatterns("/api/ask");
+		// These run after the security filters, so the caller is already authenticated.
+		Function<HttpServletRequest, String> user = req -> req.getUserPrincipal().getName();
+		registry.addInterceptor(limit(props.ask(), user)).addPathPatterns("/api/ask");
+		// After the per-user check, so requests one user already had refused don't spend everyone's budget.
+		registry.addInterceptor(limit(props.askGlobal(), req -> "all users")).addPathPatterns("/api/ask");
+		registry.addInterceptor(limit(props.search(), user)).addPathPatterns("/api/search");
+		registry.addInterceptor(limit(props.upload(), user)).addPathPatterns("/api/documents");
 	}
 
 	static HandlerInterceptor limit(Props.Limit limit, Function<HttpServletRequest, String> key) {
@@ -54,6 +61,9 @@ class RateLimits implements WebMvcConfigurer {
 		return new HandlerInterceptor() {
 			@Override
 			public boolean preHandle(HttpServletRequest req, HttpServletResponse res, Object handler) {
+				if (!"POST".equals(req.getMethod())) {
+					return true;
+				}
 				long retryAfter = windows.hit(key.apply(req));
 				if (retryAfter > 0) {
 					var problem = ProblemDetail.forStatusAndDetail(HttpStatus.TOO_MANY_REQUESTS,

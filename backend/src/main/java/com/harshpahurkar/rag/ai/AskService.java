@@ -12,7 +12,9 @@ import com.harshpahurkar.rag.search.Retriever;
 import com.harshpahurkar.rag.search.Retriever.Retrieval;
 import com.harshpahurkar.rag.search.Retriever.RetrievedChunk;
 
-/** Retrieve with the caller's roles, gate on relevance, number the sources, ask Claude. */
+import dev.langchain4j.guardrail.InputGuardrailException;
+
+/** Check for injection, retrieve with the caller's roles, keep the relevant chunks, number them, ask Claude. */
 @Service
 public class AskService {
 
@@ -37,10 +39,15 @@ public class AskService {
 	}
 
 	public AskResponse ask(String question, List<String> userRoles) {
+		// Before retrieval, so an injection attempt is blocked (422) even when it matches no document.
+		if (PromptInjectionGuardrail.looksLikeInjection(question)) {
+			throw new InputGuardrailException(PromptInjectionGuardrail.BLOCKED);
+		}
 		Retrieval retrieval = retriever.retrieve(question, userRoles, rag.topK());
-		List<RetrievedChunk> chunks = retrieval.chunks();
+		// Only relevant chunks go on: less client text sent to the third-party API, and less noise in the answer.
+		List<RetrievedChunk> chunks = retrieval.chunks().stream().filter(c -> c.score() >= rag.minScore()).toList();
 		// Score gate: when nothing is relevant enough, skip the LLM. No cost, and nothing to make an answer up from.
-		if (chunks.isEmpty() || chunks.get(0).score() < rag.minScore()) {
+		if (chunks.isEmpty()) {
 			return new AskResponse(Assistant.REFUSAL, true, List.of(), retrieval.retrievalMs(), 0);
 		}
 
@@ -49,14 +56,15 @@ public class AskService {
 			return new Source(i + 1, c.chunkId(), c.documentId(), c.title(), c.chunkIndex(), c.content(), c.score());
 		}).toList();
 		String context = sources.stream()
-			.map(s -> "[" + s.n() + "] " + s.title() + " (part " + (s.chunkIndex() + 1) + ")\n" + s.content())
+			.map(s -> "[" + s.n() + "] " + escape(s.title()) + " (part " + (s.chunkIndex() + 1) + ")\n"
+					+ escape(s.content()))
 			.collect(Collectors.joining("\n\n"));
 
 		String memoryId = UUID.randomUUID().toString();
 		long start = System.nanoTime();
 		String answer;
 		try {
-			answer = assistant.answer(memoryId, question, context);
+			answer = assistant.answer(memoryId, question, context, sources.size());
 		}
 		finally {
 			assistant.evictChatMemory(memoryId);
@@ -67,6 +75,11 @@ public class AskService {
 		boolean refused = answer == null || answer.isBlank() || answer.strip().equals(Assistant.REFUSAL);
 		return new AskResponse(refused ? Assistant.REFUSAL : answer, refused, sources, retrieval.retrievalMs(),
 				generationMs);
+	}
+
+	/** Document text can't close the {@code <sources>} block and write its own instructions after it. */
+	private static String escape(String text) {
+		return text.replace("<", "&lt;").replace(">", "&gt;");
 	}
 
 }

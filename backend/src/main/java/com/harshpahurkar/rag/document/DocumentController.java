@@ -5,8 +5,7 @@ import java.io.InputStream;
 import java.util.List;
 
 import org.springframework.http.HttpStatus;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.core.Authentication;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,6 +16,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+
+import com.harshpahurkar.rag.security.Roles;
+
+import jakarta.validation.constraints.Size;
 
 /** Upload and delete are ADMIN-only (see SecurityConfig); listing is filtered to the caller's roles. */
 @RestController
@@ -30,14 +33,14 @@ class DocumentController {
 	}
 
 	@GetMapping
-	List<DocumentView> list(@AuthenticationPrincipal Jwt jwt) {
-		return ingestion.listReadable(jwt.getClaimAsStringList("roles"));
+	List<DocumentView> list(Authentication authentication) {
+		return ingestion.listReadable(Roles.of(authentication));
 	}
 
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
-	DocumentView upload(@RequestParam MultipartFile file, @RequestParam(required = false) String title,
-			@RequestParam(required = false) List<String> allowedRoles, @AuthenticationPrincipal Jwt jwt)
+	DocumentView upload(@RequestParam MultipartFile file, @RequestParam(required = false) @Size(max = 200) String title,
+			@RequestParam(required = false) List<String> allowedRoles, Authentication authentication)
 			throws IOException {
 		String filename = StringUtils.getFilename(file.getOriginalFilename());
 		if (!StringUtils.hasText(filename)) {
@@ -48,7 +51,7 @@ class DocumentController {
 		}
 		try (InputStream in = file.getInputStream()) {
 			return ingestion.ingest(title.strip(), filename, file.getContentType(), in, allowedRoles,
-					jwt.getSubject());
+					authentication.getName());
 		}
 	}
 

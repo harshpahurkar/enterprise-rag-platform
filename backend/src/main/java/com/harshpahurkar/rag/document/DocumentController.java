@@ -60,8 +60,8 @@ class DocumentController {
 	@DeleteMapping("/{id}")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
 	@PreAuthorize("hasRole('ADMIN')")
-	void delete(@PathVariable long id) {
-		ingestion.delete(id);
+	void delete(@PathVariable long id, Authentication authentication) {
+		ingestion.delete(id, Roles.of(authentication));
 	}
 
 }

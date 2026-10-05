@@ -10,6 +10,9 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql
     shm_size: 1gb
+    # The entrypoint needs its capabilities to switch to the postgres user; block privilege gains after that.
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d rag"]
       interval: 5s
@@ -24,6 +27,15 @@ services:
       DB_URL: jdbc:postgresql://db:5432/rag
     ports:
       - "127.0.0.1:8080:8080" # localhost only: the demo profile seeds known passwords
+    # Hardening: immutable root filesystem, no Linux capabilities, no privilege escalation.
+    # /tmp is the only writable path (Tomcat multipart files, ONNX Runtime's extracted native library).
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       db:
         condition: service_healthy

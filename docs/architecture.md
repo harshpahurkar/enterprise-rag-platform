@@ -122,14 +122,12 @@ All errors are Spring `ProblemDetail` JSON.
 | 400 | Bean Validation failure, unknown role, file with no text | varies |
 | 401 | Bad login; missing, invalid or expired token | `Invalid username or password` (login) |
 | 403 | Non-admin upload or delete | |
-| 404 | Delete of an unknown document id | `Document {id} not found` |
+| 404 | Delete of a missing document, or one outside the caller's roles | `Document not found` |
 | 422 | Input guardrail | `The question was blocked because it looks like an attempt to change the assistant's instructions. Please rephrase it.` |
 | 422 | Citation guardrail after the re-prompt | `The answer could not be grounded in your documents` |
 | 502 | Anthropic or HTTP failure (`LangChain4jException`) | `The language model service failed. Please try again.` |
-| 503 | No `ANTHROPIC_API_KEY` | `Answering is unavailable: the server has no Anthropic API key configured` |
-
-**[?]**
-The status code for a rate-limited request is not recorded here; 429 is the usual choice. Check the rate-limit filter before relying on it.
+| 503 | No `ANTHROPIC_API_KEY` | `ANTHROPIC_API_KEY is not set: search works, Ask needs a key` |
+| 429 | A rate limit (login, search, upload, Ask, or the global Ask cap) | `Too many requests. Try again in N seconds.` plus a `Retry-After` header |
 
 ## 8. Known failure modes
 

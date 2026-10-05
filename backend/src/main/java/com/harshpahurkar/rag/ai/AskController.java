@@ -4,8 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -13,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.harshpahurkar.rag.ai.AskService.AskResponse;
+import com.harshpahurkar.rag.security.Roles;
 
 import dev.langchain4j.exception.LangChain4jException;
 import dev.langchain4j.guardrail.InputGuardrailException;
@@ -37,11 +37,14 @@ class AskController {
 	}
 
 	@PostMapping("/ask")
-	AskResponse ask(@Valid @RequestBody AskRequest req, @AuthenticationPrincipal Jwt jwt) {
-		return askService.ask(req.question(), jwt.getClaimAsStringList("roles"));
+	AskResponse ask(@Valid @RequestBody AskRequest req, Authentication authentication) {
+		return askService.ask(req.question(), Roles.of(authentication));
 	}
 
-	/** Fixed text: the exception's own message names guardrail classes. Only the injection check can fail input. */
+	/**
+	 * Fixed text: the exception's own message names guardrail classes. Only the injection check can fail input,
+	 * in AskService or in the AI Service. A missing API key is a ResponseStatusException (503) from AiConfig.
+	 */
 	@ExceptionHandler(InputGuardrailException.class)
 	ProblemDetail blocked(InputGuardrailException e) {
 		return ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_CONTENT,
@@ -53,14 +56,6 @@ class AskController {
 	ProblemDetail ungrounded(OutputGuardrailException e) {
 		return ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_CONTENT,
 				"The answer could not be grounded in your documents");
-	}
-
-	/** Thrown by the placeholder chat model when ANTHROPIC_API_KEY is blank (see AiConfig). */
-	@ExceptionHandler(IllegalStateException.class)
-	ProblemDetail notConfigured(IllegalStateException e) {
-		log.warn("Ask unavailable: {}", e.getMessage());
-		return ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE,
-				"Answering is unavailable: the server has no Anthropic API key configured");
 	}
 
 	/** Provider and HTTP failures. Details go to the log, never to the caller. */

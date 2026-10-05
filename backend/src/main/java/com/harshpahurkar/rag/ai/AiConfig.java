@@ -4,6 +4,8 @@ import java.util.Map;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.harshpahurkar.rag.AppProperties;
 
@@ -37,7 +39,8 @@ public class AiConfig {
 	 * Claude, with no temperature/top_p/top_k (Opus 5.5 rejects them) and no thinking config (it can't be
 	 * turned off). Effort goes in output_config. The fallback beta lets the API retry a request a safety
 	 * classifier declined on another model instead of failing it. Without a key the app still starts (search
-	 * needs no LLM) and only /api/ask fails, as a 503.
+	 * needs no LLM) and only /api/ask fails, as a 503: LangChain4j passes the ResponseStatusException through
+	 * unwrapped, and Spring turns it into the response.
 	 */
 	@Bean
 	ChatModel chatModel(AppProperties props) {
@@ -46,7 +49,8 @@ public class AiConfig {
 			return new ChatModel() {
 				@Override
 				public ChatResponse doChat(ChatRequest request) {
-					throw new IllegalStateException("ANTHROPIC_API_KEY is not set");
+					throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+							"ANTHROPIC_API_KEY is not set: search works, Ask needs a key");
 				}
 			};
 		}

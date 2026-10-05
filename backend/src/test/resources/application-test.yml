@@ -3,3 +3,9 @@ app:
     secret: test-secret-test-secret-test-secret-0123456789
   llm:
     api-key: test-key-not-used
+  # High enough that no test trips them; RateLimitIT sets its own.
+  rate-limit:
+    login:
+      requests: 100000
+    ask:
+      requests: 100000

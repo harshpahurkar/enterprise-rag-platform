@@ -1,0 +1,61 @@
+package com.harshpahurkar.rag.document;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.List;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+
+/** Upload and delete are ADMIN-only (see SecurityConfig); listing is filtered to the caller's roles. */
+@RestController
+@RequestMapping("/api/documents")
+class DocumentController {
+
+	private final IngestionService ingestion;
+
+	DocumentController(IngestionService ingestion) {
+		this.ingestion = ingestion;
+	}
+
+	@GetMapping
+	List<DocumentView> list(@AuthenticationPrincipal Jwt jwt) {
+		return ingestion.listReadable(jwt.getClaimAsStringList("roles"));
+	}
+
+	@PostMapping
+	@ResponseStatus(HttpStatus.CREATED)
+	DocumentView upload(@RequestParam MultipartFile file, @RequestParam(required = false) String title,
+			@RequestParam(required = false) List<String> allowedRoles, @AuthenticationPrincipal Jwt jwt)
+			throws IOException {
+		String filename = StringUtils.getFilename(file.getOriginalFilename());
+		if (!StringUtils.hasText(filename)) {
+			filename = "upload";
+		}
+		if (!StringUtils.hasText(title)) {
+			title = StringUtils.stripFilenameExtension(filename);
+		}
+		try (InputStream in = file.getInputStream()) {
+			return ingestion.ingest(title.strip(), filename, file.getContentType(), in, allowedRoles,
+					jwt.getSubject());
+		}
+	}
+
+	@DeleteMapping("/{id}")
+	@ResponseStatus(HttpStatus.NO_CONTENT)
+	void delete(@PathVariable long id) {
+		ingestion.delete(id);
+	}
+
+}

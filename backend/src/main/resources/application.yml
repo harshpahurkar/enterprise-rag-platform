@@ -29,7 +29,7 @@ app:
     chunk-overlap: 150
     top-k: 6
     search-k: 10
-    min-score: 0.55
+    min-score: 0.6
   llm:
     api-key: ${ANTHROPIC_API_KEY:}
     model: ${LLM_MODEL:claude-opus-5-5}

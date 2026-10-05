@@ -49,6 +49,12 @@ class ErrorResponsesIT {
 			return "ok";
 		}
 
+		/** A bug whose message holds a secret, as a driver or library exception might. */
+		@GetMapping("/api/test/boom")
+		String boom() {
+			throw new RuntimeException("db password is hunter2");
+		}
+
 	}
 
 	@TestConfiguration(proxyBeanMethods = false)
@@ -99,6 +105,14 @@ class ErrorResponsesIT {
 			.header("Accept", "application/json")
 			.build();
 		return http.send(request, HttpResponse.BodyHandlers.ofString());
+	}
+
+	@Test
+	void unhandledErrorIsA500WithoutMessageOrClassNames() throws Exception {
+		HttpResponse<String> res = get("/api/test/boom", "err.hr");
+		assertThat(res.statusCode()).isEqualTo(500);
+		assertThat(res.body()).doesNotContain("hunter2", "Exception", "java.", "ProbeController", "trace");
+		assertThat(res.headers().map().toString()).doesNotContain("hunter2", "Exception");
 	}
 
 	@Test

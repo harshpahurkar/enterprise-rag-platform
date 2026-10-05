@@ -24,6 +24,14 @@ spring:
   threads:
     virtual:
       enabled: true
+  # Pinned so a default change can't leak internals in /error responses. Boot 4 ignores the old
+  # server.error.include-* keys; these are their replacements.
+  web:
+    error:
+      include-message: never
+      include-stacktrace: never
+      include-exception: false
+      include-binding-errors: never
 
 app:
   jwt:

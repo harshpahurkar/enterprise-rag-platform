@@ -5,7 +5,7 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>4.1.1</version>
+		<version>4.1.2</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com.harshpahurkar</groupId>
@@ -15,14 +15,14 @@
 	<description>Enterprise RAG platform</description>
 	<properties>
 		<java.version>21</java.version>
-		<langchain4j.version>1.21.0</langchain4j.version>
+		<langchain4j.version>1.23.0</langchain4j.version>
 		<!-- CVE fixes over Boot 4.1.1's managed versions (OSV, 2026-09-22). Remove once Boot ships them. -->
 		<tomcat.version>11.0.25</tomcat.version>
 		<jackson-bom.version>3.1.7</jackson-bom.version>
 		<jackson-2-bom.version>2.21.7</jackson-2-bom.version>
 		<test.excludedGroups>benchmark</test.excludedGroups>
 		<!-- Tika's crypto module pulls BouncyCastle 1.81 (CRITICAL CVE-2025-14813, CVE-2026-8763 per Trivy, 2026-09-27). -->
-		<bouncycastle.version>1.86</bouncycastle.version>
+		<bouncycastle.version>1.87</bouncycastle.version>
 	</properties>
 	<dependencyManagement>
 		<dependencies>
